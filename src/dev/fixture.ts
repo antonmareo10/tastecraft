@@ -30,7 +30,7 @@ function cells(): HeatCell[] {
 export const FIXTURE: AgentEvent[] = [
   { type: "note", text: "[DEV FIXTURE] Locating the restaurant first, then reading its audience." },
   { type: "tool_start", id: "t1", tool: "find_restaurant", label: "Locating Casa Lucio in Qloo’s taste graph", input: {} },
-  { type: "restaurant", entity: { entity_id: "dev-1", name: "Casa Lucio", subtitle: "Calle Cava Baja 35, Madrid", tags: ["Spanish", "Tapas", "Traditional"], lat: 40.4123, lon: -3.7089 } },
+  { type: "restaurant", entity: { entity_id: "dev-1", name: "Casa Lucio", subtitle: "Calle Cava Baja 35, Madrid", tags: ["Spanish", "Tapas", "Traditional"], lat: 40.4123, lon: -3.7089 }, resolution: { status: "ambiguous", match: "exact", alternatives: [{ entity_id: "dev-2", name: "Casa Lucio", subtitle: "Calle de Alcalá 99, Madrid" }, { entity_id: "dev-3", name: "Lucio Bistró", subtitle: "Calle Mayor 12, Madrid" }] } },
   { type: "tool_end", id: "t1", tool: "find_restaurant", summary: "Found Casa Lucio · Calle Cava Baja 35" },
   { type: "tool_start", id: "t2", tool: "audience_affinity", label: "Places your guests also love nearby", input: {} },
   { type: "tool_end", id: "t2", tool: "audience_affinity", summary: "12 results", domain: "place", entities: [

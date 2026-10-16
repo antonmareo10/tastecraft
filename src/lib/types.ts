@@ -100,7 +100,7 @@ export type AgentEvent =
       error?: boolean;
     }
   | { type: "heatmap"; cells: HeatCell[]; zones: Zone[]; center: [number, number] }
-  | { type: "restaurant"; entity: EntityRef & { lat?: number; lon?: number } }
+  | { type: "restaurant"; entity: EntityRef & { lat?: number; lon?: number }; resolution?: Resolution }
   | { type: "baseline"; text: string }
   | { type: "compare"; a: string; b: string; tags: { name: string; score?: number }[] }
   | { type: "shows"; shows: { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number }[] }
@@ -112,9 +112,17 @@ export type AgentEvent =
   | { type: "error"; message: string }
   | { type: "done"; elapsed_ms: number };
 
+// How sure we are that the Qloo entity is the owner's restaurant (shown to the owner, who can switch).
+export type Resolution = {
+  status: "resolved" | "ambiguous" | "not_found";
+  match: "owner_confirmed" | "exact" | "close" | "best_guess";
+  alternatives: { entity_id: string; name: string; subtitle?: string }[];
+};
+
 export type AgentRequest = {
   restaurant: string; // name of the restaurant
   city: string;
+  entity_id?: string; // Qloo entity the owner picked after a wrong or ambiguous match
   goal?: string; // optional free-text goal ("fill Tuesday nights", "launch brunch")
   lens?: { age?: string; gender?: string }; // optional audience lens
   language?: "English" | "Español";

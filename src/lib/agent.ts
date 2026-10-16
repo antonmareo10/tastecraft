@@ -18,6 +18,8 @@ import {
   tasteTags,
   findRestaurant,
   nameZones,
+  resolveRestaurant,
+  restaurantById,
   tasteGaps,
   tasteHeatmap,
   type Lens,
@@ -30,7 +32,7 @@ const MODEL = process.env.TASTECRAFT_MODEL || "claude-opus-5-5";
 const SYSTEM = `You are Tastecraft, the taste-intelligence analyst for independent restaurants. Chains have insight teams; your job is to give a small restaurant the same edge using Qloo's taste graph (cross-domain affinity data across places, brands, music, film, TV, books and more).
 
 How you work:
-1. Locate the restaurant with find_restaurant. If several candidates come back, pick the one whose address matches the city; if none matches, say so in a note and work at city level using the concept the owner described.
+1. Locate the restaurant with find_restaurant. It auto-selects the best candidate and reports how sure the match is. If the match is ambiguous and another candidate clearly fits the owner's restaurant better (address in the city, same concept), call find_restaurant again with that entity_id. Never switch away from a match the owner confirmed. If nothing matches, say so in a note and work at city level using the concept the owner described.
 2. Build the audience's taste DNA with audience_affinity. Always run "place" (local places the same guests love). Then pick the 3 other domains most useful for the owner's goal (usually artist, brand and one of movie/tv_show/podcast). Call independent tools in parallel.
 3. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
 4. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
@@ -50,7 +52,9 @@ Rules for the playbook:
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
 - week_plan turns everything into next week's schedule (supplier order early in the week, launch, posts timed to when the audience goes out, the event, a review of results).
-- In caveats, state honestly what the data cannot tell (e.g. missing data, small samples).
+- Qloo affinities describe what people who like this restaurant tend to like, in aggregate. Phrase them as group tendencies ("guests who love this place over-index on vermouth"), never as causal claims or predictions about an individual guest, and never infer sensitive traits (health, finances, politics, religion).
+- Keep facts and judgment apart: evidence holds only Qloo facts; "why", "opportunity", the event and the plan are your interpretation, framed as bets to test.
+- In caveats, state honestly what the data cannot tell (e.g. missing data, small samples). Always include one line on what these results do not establish (affinity is not demand or sales, so test before scaling), and say so if the restaurant match was ambiguous.
 - Write in clear, warm, practical language for a busy owner, in the language the owner asked for (default English). Keep proper names as they are.
 
 Before each group of tool calls, write one short sentence (max 15 words) saying what you are checking and why. After publish_playbook, reply with a single short sentence.`;
@@ -132,14 +136,14 @@ type Emit = (e: AgentEvent) => void;
 
 const FOLLOWUP_SYSTEM = `You are Tastecraft, the taste-intelligence analyst for an independent restaurant. The owner already received a taste playbook and now asks a follow-up question.
 Use the Qloo tools to get fresh evidence for this specific question (for example, re-run audience_affinity or taste_tags with a demographic lens, or taste_map). Call independent tools in parallel and keep it to the few calls the question needs.
-Then call answer_owner exactly once with a direct, practical answer (max 160 words) and 2-4 concrete Qloo facts; for each fact list in "cites" the exact names and 0-100 scores as the tools returned them (the server verifies them). Never invent data. Answer in the language the owner asked for (default English).
+Then call answer_owner exactly once with a direct, practical answer (max 160 words) and 2-4 concrete Qloo facts, phrased as aggregate tendencies of the restaurant's audience, never as predictions about an individual guest; for each fact list in "cites" the exact names and 0-100 scores as the tools returned them (the server verifies them). Never invent data. Answer in the language the owner asked for (default English).
 Before each group of tool calls, write one short sentence (max 15 words) saying what you are checking.`;
 
 function lensFromGoal(req: AgentRequest): Lens | undefined {
   return req.lens && (req.lens.age || req.lens.gender) ? req.lens : undefined;
 }
 
-function short(err: unknown): string {
+function shortMessage(err: unknown): string {
   if (err instanceof QlooError) return err.message;
   if (err instanceof Error) return err.message;
   return String(err);
@@ -154,33 +158,68 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
   let published = false;
   const ledger = new EvidenceLedger();
 
+  // A rejected or missing Qloo key will not fix itself: stop the run instead of writing a playbook without data.
+  const stopper = new AbortController();
+  let fatal: string | null = null;
+  const short = (err: unknown): string => {
+    if (err instanceof QlooError && (err.code === "QLOO_AUTH" || err.code === "QLOO_CONFIG") && !fatal) {
+      fatal = err.message;
+      setTimeout(() => stopper.abort(), 0);
+    }
+    return shortMessage(err);
+  };
+
   const findTool = betaZodTool({
     name: "find_restaurant",
     description:
-      "Search Qloo's taste graph for a restaurant by name and city. Returns up to 8 candidates with Qloo entity id, address, tags (cuisine, style), price level and rating. Call this first.",
-    inputSchema: z.object({ name: z.string(), city: z.string() }),
-    run: async ({ name, city }, ctx) => {
+      "Search Qloo's taste graph for a restaurant by name and city. Returns up to 8 candidates with Qloo entity id, address, tags (cuisine, style), price level and rating, the auto-selected candidate and how sure that match is. Call this first. To switch to another candidate, call it again with that candidate's entity_id.",
+    inputSchema: z.object({
+      name: z.string(),
+      city: z.string(),
+      entity_id: z.string().optional().describe("Switch to this candidate (from a previous find_restaurant result)"),
+    }),
+    run: async ({ name, city, entity_id }, ctx) => {
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
       emit({ type: "tool_start", id, tool: "find_restaurant", label: `Locating ${name} in Qloo’s taste graph`, input: { name, city } });
       try {
-        const matches = await findRestaurant(name, city);
-        for (const m of matches.slice(0, 3)) {
+        let matches = await findRestaurant(name, city);
+        // The owner's own pick always wins over the agent's.
+        const preferred = req.entity_id ?? entity_id;
+        if (preferred && !matches.some((m) => m.entity_id === preferred)) {
+          const direct = await restaurantById(preferred).catch(() => null);
+          if (direct) matches = [direct, ...matches];
+        }
+        const { selected, resolution } = resolveRestaurant(name, city, matches, preferred);
+        if (req.entity_id && selected?.entity_id === req.entity_id) resolution.match = "owner_confirmed";
+        for (const m of [...(selected ? [selected] : []), ...matches.slice(0, 3)]) {
           ledger.record(m.name, "search", m.popularity != null ? m.popularity * 100 : null);
           m.all_tags.forEach((t) => ledger.record(t, "search"));
         }
-        if (matches[0]) {
-          restaurant = matches[0];
-          emit({ type: "restaurant", entity: matches[0] });
+        if (selected) {
+          restaurant = selected;
+          emit({ type: "restaurant", entity: selected, resolution });
         }
+        const how = { owner_confirmed: "Confirmed by you", exact: "Exact match", close: "Close match", best_guess: "Best guess" }[resolution.match];
         emit({
           type: "tool_end",
           id,
           tool: "find_restaurant",
-          summary: matches[0] ? `Found ${matches[0].name}${matches[0].subtitle ? ` · ${matches[0].subtitle}` : ""}` : "No match found",
-          entities: matches.slice(0, 3),
+          summary: selected
+            ? `${how}: ${selected.name}${selected.subtitle ? ` · ${selected.subtitle}` : ""}${resolution.status === "ambiguous" ? " (other candidates fit too)" : ""}`
+            : "No match found",
+          entities: selected ? [selected, ...matches.filter((m) => m.entity_id !== selected.entity_id)].slice(0, 3) : [],
         });
-        return JSON.stringify(
-          matches.map((m) => ({
+        return JSON.stringify({
+          selected_entity_id: selected?.entity_id ?? null,
+          match: resolution.match,
+          status: resolution.status,
+          note:
+            resolution.match === "owner_confirmed"
+              ? "The owner confirmed this restaurant. Do not switch."
+              : resolution.status === "ambiguous"
+                ? "Several candidates could be this restaurant. Keep the selection unless another one clearly fits better; the owner can switch in the app. Mention the ambiguity in caveats."
+                : undefined,
+          candidates: matches.map((m) => ({
             entity_id: m.entity_id,
             name: m.name,
             address: m.subtitle,
@@ -189,7 +228,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
             popularity: m.popularity,
             tags: m.all_tags.slice(0, 15),
           })),
-        );
+        });
       } catch (err) {
         emit({ type: "tool_end", id, tool: "find_restaurant", summary: short(err), error: true });
         return `Error: ${short(err)}`;
@@ -577,38 +616,50 @@ Owner's question: ${fu.question}`
           ],
       messages: [{ role: "user", content: followupMessage ?? userMessage }],
     },
-    { signal },
+    { signal: signal ? AbortSignal.any([signal, stopper.signal]) : stopper.signal },
   );
 
   let lastDraftAt = 0;
   let draftId: string | null = null;
-  for await (const stream of runner) {
-    stream.on("streamEvent", (event, snapshot) => {
-      if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return;
-      const block = snapshot.content[event.index];
-      if (!block || block.type !== "tool_use" || block.name !== "publish_playbook") return;
-      if (!draftId) {
-        draftId = `draft-${block.id}`;
-        emit({ type: "tool_start", id: draftId, tool: "draft_playbook", label: "Drafting your playbook", input: {} });
+  try {
+    for await (const stream of runner) {
+      stream.on("streamEvent", (event, snapshot) => {
+        if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return;
+        const block = snapshot.content[event.index];
+        if (!block || block.type !== "tool_use" || block.name !== "publish_playbook") return;
+        if (!draftId) {
+          draftId = `draft-${block.id}`;
+          emit({ type: "tool_start", id: draftId, tool: "draft_playbook", label: "Drafting your playbook", input: {} });
+        }
+        const now = Date.now();
+        if (now - lastDraftAt < 700) return;
+        lastDraftAt = now;
+        emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
+      });
+      const message = await stream.finalMessage();
+      if (draftId) {
+        emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft complete" });
+        draftId = null;
       }
-      const now = Date.now();
-      if (now - lastDraftAt < 700) return;
-      lastDraftAt = now;
-      emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
-    });
-    const message = await stream.finalMessage();
-    if (draftId) {
-      emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft complete" });
-      draftId = null;
+      for (const block of message.content) {
+        if (block.type === "text" && block.text.trim()) emit({ type: "note", text: block.text.trim() });
+        if (block.type === "thinking" && block.thinking.trim()) emit({ type: "note", text: block.thinking.trim() });
+      }
+      if (message.stop_reason === "refusal") {
+        emit({ type: "error", message: "The model declined this request. Try another restaurant." });
+        return;
+      }
     }
-    for (const block of message.content) {
-      if (block.type === "text" && block.text.trim()) emit({ type: "note", text: block.text.trim() });
-      if (block.type === "thinking" && block.thinking.trim()) emit({ type: "note", text: block.thinking.trim() });
-    }
-    if (message.stop_reason === "refusal") {
-      emit({ type: "error", message: "The model declined this request. Try another restaurant." });
+  } catch (err) {
+    if (fatal) {
+      emit({ type: "error", message: fatal });
       return;
     }
+    throw err;
+  }
+  if (fatal && !published) {
+    emit({ type: "error", message: fatal });
+    return;
   }
   if (!published) emit({ type: "error", message: fu ? "The agent stopped before answering. Please try again." : "The agent stopped before publishing a playbook. Please try again." });
 }

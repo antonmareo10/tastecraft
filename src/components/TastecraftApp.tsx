@@ -133,7 +133,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                 <input
                   required
                   value={form.restaurant}
-                  onChange={(e) => setForm({ ...form, restaurant: e.target.value })}
+                  onChange={(e) => setForm({ ...form, restaurant: e.target.value, entity_id: undefined })}
                   placeholder="e.g. Casa Lucio"
                   className="w-full rounded-lg border border-line bg-paper/60 px-3 py-2.5 text-[15px] outline-none transition focus:border-olive focus:bg-card"
                 />
@@ -142,7 +142,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                 <input
                   required
                   value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  onChange={(e) => setForm({ ...form, city: e.target.value, entity_id: undefined })}
                   placeholder="e.g. Madrid"
                   className="w-full rounded-lg border border-line bg-paper/60 px-3 py-2.5 text-[15px] outline-none transition focus:border-olive focus:bg-card"
                 />
@@ -225,11 +225,11 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
 
         <div ref={resultsRef} className="scroll-mt-4">
           {started && (
-            <div className="grid gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
-              <div className="no-print lg:sticky lg:top-4">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
+              <div className="no-print min-w-0 lg:sticky lg:top-4">
                 <Timeline items={items} running={phase === "running"} elapsedMs={elapsed} />
               </div>
-              <div>
+              <div className="min-w-0">
                 {replay && (
                   <p className="mb-4 rounded-xl border border-line bg-card px-4 py-2.5 text-[13px] text-ink-2">
                     Instant replay of a real Tastecraft run recorded on{" "}
@@ -250,7 +250,20 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                     </button>
                   </div>
                 )}
-                <PlaybookView live={live} running={phase === "running"} language={form.language} />
+                <PlaybookView
+                  live={live}
+                  running={phase === "running"}
+                  language={form.language}
+                  onPickAlternative={
+                    replay
+                      ? undefined
+                      : (alt) => {
+                          const req = { ...form, restaurant: alt.name, entity_id: alt.entity_id };
+                          setForm(req);
+                          run(req);
+                        }
+                  }
+                />
                 {phase === "done" && live.playbook && live.restaurant && (
                   <div className="mt-5">
                     <FollowUp
@@ -305,6 +318,7 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
       }
       case "restaurant":
         live.restaurant = ev.entity;
+        live.resolution = ev.resolution;
         break;
       case "heatmap":
         live.heatmap = { cells: ev.cells, zones: ev.zones, center: ev.center };
@@ -363,7 +377,7 @@ function Logo() {
 
 function HowItWorks() {
   const steps = [
-    ["Find", "Locates your restaurant inside Qloo’s taste graph of 250M+ places, brands, artists and titles."],
+    ["Find", "Locates your restaurant inside Qloo’s taste graph of hundreds of millions of places, brands, artists and titles."],
     ["Profile", "Reads what your guests also love — nearby places, music, brands, movies — with real affinity scores."],
     ["Map", "Draws where people with your guests’ taste live and go out, neighborhood by neighborhood."],
     ["Act", "Turns it into three dishes to test, an event, a ready-to-post campaign and a supplier shopping list."],

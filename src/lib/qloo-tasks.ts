@@ -3,7 +3,7 @@
 
 import ngeohash from "ngeohash";
 import { entitiesFrom, qlooGet, tagName, toEntityRef, type RawEntity, type RawTag } from "./qloo";
-import type { EntityRef, HeatCell, Zone } from "./types";
+import type { EntityRef, HeatCell, Zone, Resolution } from "./types";
 
 export const DOMAINS = ["place", "brand", "artist", "movie", "tv_show", "book", "podcast", "destination"] as const;
 export type Domain = (typeof DOMAINS)[number];
@@ -41,6 +41,65 @@ export async function findRestaurant(name: string, city: string): Promise<Restau
     const bm = (b.subtitle ?? "").toLowerCase().includes(cityLc) ? 1 : 0;
     return bm - am;
   });
+}
+
+// Owner-confirmed lookup when the picked entity is not in the search results.
+export async function restaurantById(entityId: string): Promise<RestaurantMatch | null> {
+  const json = await qlooGet("/entities", { entity_ids: entityId });
+  const [e] = entitiesFrom(json);
+  return e ? toRestaurantMatch(e) : null;
+}
+
+const plain = (x: string) =>
+  x
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['\u2019`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+// 3 = same name, 2 = one name contains the other, 1 = shares a meaningful word, 0 = unrelated.
+function nameScore(query: string, candidate: string): number {
+  const q = plain(query);
+  const c = plain(candidate);
+  if (!q || !c) return 0;
+  if (q === c) return 3;
+  if (c.includes(q) || q.includes(c)) return 2;
+  const words = new Set(q.split(" ").filter((w) => w.length > 2 && !["the", "and", "restaurant", "bar", "cafe"].includes(w)));
+  return c.split(" ").some((w) => words.has(w)) ? 1 : 0;
+}
+
+// Picks the candidate to analyse and says how sure the match is, so the owner can confirm or switch
+// before relying on the results (Qloo's safe-use guidance: show resolved matches to the user).
+export function resolveRestaurant(
+  name: string,
+  city: string,
+  matches: RestaurantMatch[],
+  preferredId?: string,
+): { selected: RestaurantMatch | null; resolution: Resolution } {
+  const others = (sel: RestaurantMatch) =>
+    matches
+      .filter((m) => m.entity_id !== sel.entity_id)
+      .slice(0, 4)
+      .map((m) => ({ entity_id: m.entity_id, name: m.name, subtitle: m.subtitle }));
+  if (!matches.length) return { selected: null, resolution: { status: "not_found", match: "best_guess", alternatives: [] } };
+  const preferred = preferredId ? matches.find((m) => m.entity_id === preferredId) : undefined;
+  if (preferred) {
+    return { selected: preferred, resolution: { status: "resolved", match: "owner_confirmed", alternatives: others(preferred) } };
+  }
+  const cityKey = plain(city);
+  const inCity = (m: RestaurantMatch) => (cityKey ? plain(m.subtitle ?? "").includes(cityKey) : false);
+  const ranked = matches
+    .map((m, i) => ({ m, name: nameScore(name, m.name), city: inCity(m), i }))
+    .sort((a, b) => b.name * 2 + Number(b.city) - (a.name * 2 + Number(a.city)) || a.i - b.i);
+  const [top, second] = ranked;
+  const match: Resolution["match"] = top.name === 3 ? "exact" : top.name === 2 ? "close" : "best_guess";
+  const tie = second != null && second.name === top.name && second.city === top.city;
+  return {
+    selected: top.m,
+    resolution: { status: match === "exact" && !tie ? "resolved" : "ambiguous", match, alternatives: others(top.m) },
+  };
 }
 
 function toRestaurantMatch(e: RawEntity): RestaurantMatch {

@@ -40,6 +40,19 @@ function heatmap() {
   return out;
 }
 
+function candidates(name) {
+  const place = (entity_id, n, address, lat, lon, popularity) => ({
+    entity_id, name: n, types: ["urn:entity:place"], popularity,
+    properties: { address, price_level: 3, business_rating: 4.5, geocode: { city: "Madrid", name: "Madrid" } },
+    location: { lat, lon }, tags: restaurantTags,
+  });
+  return [
+    place("MOCK-R1", name, "Calle Mock 35, Madrid", 40.4123, -3.7089, 0.82),
+    place("MOCK-R2", name, "Avenida Mock 99, Madrid", 40.4301, -3.6912, 0.41),
+    place("MOCK-R3", "Mock Bistro", "Rua Mock 7, Lisboa", 38.7223, -9.1393, 0.3),
+  ];
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   const p = url.searchParams;
@@ -48,7 +61,13 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(obj));
   };
   if (url.pathname === "/search") {
-    return send({ results: [{ entity_id: "MOCK-R1", name: (p.get("query") || "Mock").split(" ")[0] + " (mock)", types: ["urn:entity:place"], popularity: 0.82, properties: { address: "Calle Mock 35, Madrid", price_level: 3, business_rating: 4.5, geocode: { city: "Madrid", name: "Madrid" } }, location: { lat: 40.4123, lon: -3.7089 }, tags: restaurantTags }] });
+    // Two branches with the same name plus an unrelated place, to exercise match resolution.
+    const name = (p.get("query") || "Mock").split(" ").slice(0, 2).join(" ");
+    return send({ results: candidates(name) });
+  }
+  if (url.pathname === "/entities") {
+    const ids = (p.get("entity_ids") || "").split(",");
+    return send({ results: candidates("Mock").filter((c) => ids.includes(c.entity_id)) });
   }
   if (url.pathname === "/v2/analysis/compare") {
     return send({ results: { tags: placeTags.slice(0, 6).map((t, i) => ({ tag_id: t.id, name: t.name, subtype: t.type, query: { score: 0.8 - i * 0.1 } })) } });

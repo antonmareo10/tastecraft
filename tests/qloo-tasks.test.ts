@@ -123,6 +123,29 @@ describe("qlooGet", () => {
     expect((init.headers as Record<string, string>)["X-Api-Key"]).toBe("test-key");
   });
 
+  it("does not retry a rejected key and labels it QLOO_AUTH", async () => {
+    vi.resetModules();
+    const fetchMock = vi.fn(async () => new Response("nope", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { qlooGet } = await import("@/lib/qloo");
+    await expect(qlooGet("/search", { query: "x" })).rejects.toMatchObject({ code: "QLOO_AUTH", status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a 5xx once, then succeeds", async () => {
+    vi.resetModules();
+    let n = 0;
+    const fetchMock = vi.fn(async () =>
+      ++n === 1
+        ? new Response("busy", { status: 503 })
+        : new Response(JSON.stringify({ results: [] }), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { qlooGet } = await import("@/lib/qloo");
+    await expect(qlooGet("/search", { query: "y" })).resolves.toEqual({ results: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("throws a QlooError with the status on failure", async () => {
     vi.resetModules();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 401 })));
