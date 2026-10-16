@@ -378,7 +378,6 @@ type LaidNode = ModelNode & {
   x: number;
   y: number;
   r: number;
-  order: number;
   link: string;
   label: Label | null;
   labelBox: Box | null;
@@ -457,7 +456,6 @@ function computeLayout(model: Model, width: number): Layout {
         x: 0,
         y: 0,
         r: g.nodeMin + (g.nodeMax - g.nodeMin) * mn.t,
-        order: 0,
         link: "",
         label: null,
         labelBox: null,
@@ -643,9 +641,6 @@ function computeLayout(model: Model, width: number): Layout {
   };
 
   const byPriority = [...nodes].sort((a, b) => a.rank - b.rank || b.t - a.t);
-  byPriority.forEach((nd, i) => {
-    nd.order = i;
-  });
   const placed: Box[] = [];
   for (const nd of byPriority) {
     const text = truncate(nd.name, g.maxChars);
@@ -660,8 +655,10 @@ function computeLayout(model: Model, width: number): Layout {
     const others = circles.slice(1).filter((o) => o.key !== nd.key);
     const pick =
       options.find((c) => !others.some((o) => boxHitsCircle(c.box, o))) ??
-      // A domain's #1 star always gets its name: it may graze other stars, never hide their core.
-      (nd.rank === 0 ? options.find((c) => !others.some((o) => boxHitsCircle(c.box, { ...o, r: 3 }))) : undefined);
+      // A domain's leading stars keep their names: they may graze other stars, never hide their core.
+      (nd.rank < (g.compact ? 1 : 2)
+        ? options.find((c) => !others.some((o) => boxHitsCircle(c.box, { ...o, r: 3 })))
+        : undefined);
     if (pick) {
       nd.label = pick.label;
       nd.labelBox = pick.box;
@@ -755,7 +752,9 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
   };
   const dimFor = (nd: LaidNode) =>
     !activeNode || activeNode.key === nd.key ? 1 : activeNode.domainLabel === nd.domainLabel ? 0.55 : 0.22;
-  const delay = (nd: LaidNode) => 140 + Math.min(nd.order, 28) * 30;
+  // Stars bloom outward rank by rank. The delay depends only on the star itself, so a domain
+  // streaming in later never re-times (and briefly hides) stars that are already visible.
+  const delay = (nd: LaidNode) => Math.round(140 + nd.rank * 110 + hash01(nd.key) * 90);
 
   const g = layout?.geo;
 

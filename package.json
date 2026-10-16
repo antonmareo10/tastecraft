@@ -9,7 +9,8 @@
     "lint": "eslint",
     "predev": "node scripts/ensure-demos.mjs",
     "prebuild": "node scripts/ensure-demos.mjs",
-    "record-demo": "node scripts/record-demo.mjs"
+    "record-demo": "node scripts/record-demo.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
@@ -31,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
