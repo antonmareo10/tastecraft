@@ -14,6 +14,7 @@ import {
   IconUsers,
 } from "./icons";
 import { AffinityBar, CopyButton, Pill, Section } from "./ui";
+import ShareAssets from "./ShareAssets";
 
 const TasteMap = dynamic(() => import("./TasteMap"), {
   ssr: false,
@@ -53,7 +54,15 @@ export type LiveState = {
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
 };
 
-export default function PlaybookView({ live, running }: { live: LiveState; running: boolean }) {
+export default function PlaybookView({
+  live,
+  running,
+  language,
+}: {
+  live: LiveState;
+  running: boolean;
+  language?: "English" | "Español";
+}) {
   const p = live.playbook;
   const liveShows = live.shows;
   const domains = Object.keys(live.dna).filter((d) => live.dna[d]?.length);
@@ -309,6 +318,8 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
               )}
             </Section>
           </div>
+
+          <ShareAssets playbook={p} language={language} />
 
           <ShoppingList playbook={p} />
 

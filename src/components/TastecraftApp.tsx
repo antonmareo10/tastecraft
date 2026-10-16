@@ -245,7 +245,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                     </button>
                   </div>
                 )}
-                <PlaybookView live={live} running={phase === "running"} />
+                <PlaybookView live={live} running={phase === "running"} language={form.language} />
                 {phase === "done" && live.playbook && live.restaurant && (
                   <div className="mt-5">
                     <FollowUp
