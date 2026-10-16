@@ -16,6 +16,7 @@ import {
 } from "./icons";
 import { AffinityBar, CopyButton, EvidenceLine, Pill, Section } from "./ui";
 import ShareAssets from "./ShareAssets";
+import TasteConstellation from "./TasteConstellation";
 
 const TasteMap = dynamic(() => import("./TasteMap"), {
   ssr: false,
@@ -139,6 +140,12 @@ export default function PlaybookView({
       {domains.length > 0 && (
         <Section icon={<IconUsers size={16} />} kicker="Audience taste DNA" title="What your guests also love">
           {p?.audience_dna.summary && <p className="mb-4 max-w-3xl text-[15px] leading-relaxed text-ink-2">{p.audience_dna.summary}</p>}
+          <div className="mb-5">
+            <TasteConstellation
+              center={{ name: p?.restaurant.name ?? live.restaurant?.name ?? "Your restaurant", tags: live.restaurant?.tags }}
+              domains={live.dna}
+            />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {domains.map((d) => (
               <div key={d} className="rounded-xl border border-line bg-paper/50 p-4">
