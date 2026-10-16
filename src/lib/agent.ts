@@ -143,7 +143,7 @@ function lensFromGoal(req: AgentRequest): Lens | undefined {
   return req.lens && (req.lens.age || req.lens.gender) ? req.lens : undefined;
 }
 
-function short(err: unknown): string {
+function shortMessage(err: unknown): string {
   if (err instanceof QlooError) return err.message;
   if (err instanceof Error) return err.message;
   return String(err);
@@ -157,6 +157,17 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     : null;
   let published = false;
   const ledger = new EvidenceLedger();
+
+  // A rejected or missing Qloo key will not fix itself: stop the run instead of writing a playbook without data.
+  const stopper = new AbortController();
+  let fatal: string | null = null;
+  const short = (err: unknown): string => {
+    if (err instanceof QlooError && (err.code === "QLOO_AUTH" || err.code === "QLOO_CONFIG") && !fatal) {
+      fatal = err.message;
+      setTimeout(() => stopper.abort(), 0);
+    }
+    return shortMessage(err);
+  };
 
   const findTool = betaZodTool({
     name: "find_restaurant",
@@ -605,38 +616,50 @@ Owner's question: ${fu.question}`
           ],
       messages: [{ role: "user", content: followupMessage ?? userMessage }],
     },
-    { signal },
+    { signal: signal ? AbortSignal.any([signal, stopper.signal]) : stopper.signal },
   );
 
   let lastDraftAt = 0;
   let draftId: string | null = null;
-  for await (const stream of runner) {
-    stream.on("streamEvent", (event, snapshot) => {
-      if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return;
-      const block = snapshot.content[event.index];
-      if (!block || block.type !== "tool_use" || block.name !== "publish_playbook") return;
-      if (!draftId) {
-        draftId = `draft-${block.id}`;
-        emit({ type: "tool_start", id: draftId, tool: "draft_playbook", label: "Drafting your playbook", input: {} });
+  try {
+    for await (const stream of runner) {
+      stream.on("streamEvent", (event, snapshot) => {
+        if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return;
+        const block = snapshot.content[event.index];
+        if (!block || block.type !== "tool_use" || block.name !== "publish_playbook") return;
+        if (!draftId) {
+          draftId = `draft-${block.id}`;
+          emit({ type: "tool_start", id: draftId, tool: "draft_playbook", label: "Drafting your playbook", input: {} });
+        }
+        const now = Date.now();
+        if (now - lastDraftAt < 700) return;
+        lastDraftAt = now;
+        emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
+      });
+      const message = await stream.finalMessage();
+      if (draftId) {
+        emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft complete" });
+        draftId = null;
       }
-      const now = Date.now();
-      if (now - lastDraftAt < 700) return;
-      lastDraftAt = now;
-      emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
-    });
-    const message = await stream.finalMessage();
-    if (draftId) {
-      emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft complete" });
-      draftId = null;
+      for (const block of message.content) {
+        if (block.type === "text" && block.text.trim()) emit({ type: "note", text: block.text.trim() });
+        if (block.type === "thinking" && block.thinking.trim()) emit({ type: "note", text: block.thinking.trim() });
+      }
+      if (message.stop_reason === "refusal") {
+        emit({ type: "error", message: "The model declined this request. Try another restaurant." });
+        return;
+      }
     }
-    for (const block of message.content) {
-      if (block.type === "text" && block.text.trim()) emit({ type: "note", text: block.text.trim() });
-      if (block.type === "thinking" && block.thinking.trim()) emit({ type: "note", text: block.thinking.trim() });
-    }
-    if (message.stop_reason === "refusal") {
-      emit({ type: "error", message: "The model declined this request. Try another restaurant." });
+  } catch (err) {
+    if (fatal) {
+      emit({ type: "error", message: fatal });
       return;
     }
+    throw err;
+  }
+  if (fatal && !published) {
+    emit({ type: "error", message: fatal });
+    return;
   }
   if (!published) emit({ type: "error", message: fu ? "The agent stopped before answering. Please try again." : "The agent stopped before publishing a playbook. Please try again." });
 }

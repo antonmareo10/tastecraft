@@ -10,13 +10,26 @@ const TTL_MS = 6 * 60 * 60 * 1000; // private server-side cache (allowed by Qloo
 
 type Params = Record<string, string | number | boolean | undefined | null>;
 
+// Failure codes follow the official qloo-harness naming so errors read the same across Qloo tools.
+export type QlooErrorCode = "QLOO_AUTH" | "QLOO_RATE_LIMIT" | "QLOO_TIMEOUT" | "QLOO_CONNECT" | "QLOO_BAD_REQUEST" | "QLOO_UPSTREAM" | "QLOO_CONFIG";
+
 export class QlooError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code: QlooErrorCode = "QLOO_UPSTREAM",
+    public retryable = false,
   ) {
     super(message);
   }
+}
+
+function errorFor(status: number, path: string, body: string): QlooError {
+  if (status === 401 || status === 403)
+    return new QlooError(status, `Qloo rejected the API key (${status}). Check QLOO_API_KEY; retrying will not help.`, "QLOO_AUTH");
+  if (status === 429) return new QlooError(status, "Qloo rate limit reached (429). Wait a minute before trying again.", "QLOO_RATE_LIMIT", true);
+  if (status >= 500) return new QlooError(status, `Qloo is having trouble (${status} on ${path}). Try again shortly.`, "QLOO_UPSTREAM", true);
+  return new QlooError(status, `Qloo ${status} on ${path}: ${body}`, "QLOO_BAD_REQUEST");
 }
 
 const cache = new Map<string, { at: number; value: unknown }>();
@@ -37,22 +50,44 @@ export function qlooConfigured(): boolean {
 
 export async function qlooGet<T = unknown>(path: string, params: Params = {}): Promise<T> {
   const apiKey = process.env.QLOO_API_KEY;
-  if (!apiKey) throw new QlooError(500, "QLOO_API_KEY is not configured on the server.");
+  if (!apiKey) throw new QlooError(500, "QLOO_API_KEY is not configured on the server.", "QLOO_CONFIG");
   const url = buildUrl(path, params);
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value as T;
 
-  const res = await fetch(url, {
-    headers: { "X-Api-Key": apiKey, accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) {
-    const body = (await res.text()).slice(0, 300);
-    throw new QlooError(res.status, `Qloo ${res.status} on ${path}: ${body}`);
+  // At most one retry, and only for transient failures (rate limit with a short wait, 5xx, network).
+  for (let attempt = 0; ; attempt++) {
+    let err: QlooError;
+    try {
+      const res = await fetch(url, {
+        headers: { "X-Api-Key": apiKey, accept: "application/json" },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as T;
+        cache.set(url, { at: Date.now(), value: json });
+        return json;
+      }
+      err = errorFor(res.status, path, (await res.text()).slice(0, 300));
+      const wait = Number(res.headers.get("retry-after"));
+      if (err.code === "QLOO_RATE_LIMIT" && !(wait > 0 && wait <= 5)) err.retryable = false;
+      if (attempt === 0 && err.retryable) {
+        await new Promise((r) => setTimeout(r, wait > 0 ? wait * 1000 : 800));
+        continue;
+      }
+    } catch (e) {
+      if (e instanceof QlooError) throw e;
+      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+      err = timedOut
+        ? new QlooError(0, `Qloo did not answer within 20 s on ${path}.`, "QLOO_TIMEOUT", true)
+        : new QlooError(0, `Could not reach Qloo (${e instanceof Error ? e.message : String(e)}).`, "QLOO_CONNECT", true);
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+    }
+    throw err;
   }
-  const json = (await res.json()) as T;
-  cache.set(url, { at: Date.now(), value: json });
-  return json;
 }
 
 // ---------------------------------------------------------------------------
