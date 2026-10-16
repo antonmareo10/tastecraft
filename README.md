@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tastecraft — the taste data team for independent restaurants
 
-## Getting Started
+> Chains have insight teams. Independent restaurants decide their menu, their events and their marketing on gut feel.
+> **Tastecraft is an AI agent that reads Qloo's taste graph around a restaurant and turns it into decisions an owner can act on this week** — three dishes to test, an event, a ready-to-post campaign aimed at the right neighborhoods, and a supplier shopping list — with the Qloo evidence behind every call.
 
-First, run the development server:
+**Live demo:** _link added at submission_ · Built for the Qloo Agentic Hackathon (2026)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## Why this needs Qloo (and doesn't work without it)
+
+Ask a general-purpose LLM what a tapas bar in Madrid should add to its menu and you get the same answer every tapas bar gets. Tastecraft starts from **who actually goes to *this* restaurant** — as seen through Qloo's cross-domain taste graph — and only then reasons about food:
+
+| Question an owner has | What Tastecraft asks Qloo | Endpoint |
+|---|---|---|
+| Is my restaurant in the graph, and how is it tagged? | Entity search for the place | `GET /search` |
+| What else do my guests love — nearby places, music, brands, films? | Cross-domain affinity from the restaurant entity (places filtered to the city; other domains localised with a geo signal) | `GET /v2/insights` (`filter.type=urn:entity:*`) |
+| Which dishes, cuisines and vibes does my crowd over-index on here? | Taste analysis on tag families (specialty dishes, menu highlights, cuisines, ambience) | `GET /v2/insights` (`filter.type=urn:tag`) |
+| Who are my guests? | Age and gender over/under-indexing | `GET /v2/insights` (`filter.type=urn:demographics`) |
+| What makes my crowd different from my closest rival's? | Head-to-head audience comparison | `GET /v2/analysis/compare` |
+| What do locals love that I don't serve? | **Computed in Tastecraft:** tags over-represented among the ~50 local places my guests love most, weighted by Qloo affinity, minus my own tags | `GET /v2/insights` + local analysis |
+| Where in the city does my kind of guest live and go out? | Heatmap of taste affinity by geohash, then the top distinct neighborhoods | `GET /v2/insights` (`filter.type=urn:heatmap`) |
+
+The app shows a **side-by-side of the same model with and without Qloo**, so the difference is visible, not claimed.
+
+## What the owner gets
+
+- **Audience taste DNA** — places, artists, brands and titles their guests love, with Qloo affinity scores.
+- **Cravings & crowd** — dishes, cuisines and vibes the audience over-indexes on, plus an age/gender profile.
+- **Taste map** — a heatmap of where people with this taste live and go out, with named neighborhoods to target.
+- **Head-to-head** — what distinguishes their crowd from the closest rival.
+- **Taste gaps** — what locals love that the restaurant doesn't offer yet.
+- **Three menu moves** — dishes with price, rationale and the Qloo facts behind them.
+- **An event and a playlist** grounded in the audience's music taste.
+- **A ready-to-post Instagram caption and collab partners.**
+- **A supplier shopping list** for a one-week test (CSV export and a ready-to-send order email).
+- Playbook in **English or Spanish**, and **save as PDF**.
+
+## How the agent works
+
+```
+Browser ──POST /api/agent──▶ Next.js route (streams NDJSON events)
+                               │
+                               ├─ Claude (claude-opus-5-5) via the Anthropic SDK tool runner
+                               │    tools: find_restaurant · audience_affinity · taste_tags · audience_profile
+                               │           compare_rival · taste_gaps · taste_map · publish_playbook
+                               │
+                               └─ each tool → Qloo hackathon API (cached server-side) → compact JSON for the model
+                                                                                     → rich events for the UI
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Grounding rules.** The system prompt requires every recommendation to cite concrete Qloo facts (names and affinity scores exactly as returned). The final output is a schema-validated `publish_playbook` tool call, so the UI never parses free text.
+- **Visible reasoning.** Every tool call streams to an "agent log" in the UI, together with the model's short progress notes.
+- **Honest gaps.** Tools return errors or empty data as such; the agent is instructed not to retry more than once and to list missing data in *caveats*.
+- **Cost and abuse protection.** Live runs are rate-limited per IP, capped per day and limited in concurrency. Recorded real runs replay instantly for visitors.
+- **Qloo data handling.** Responses are cached privately on the server. Recorded runs (which contain Qloo data) are **not** committed to this public repository, per the hackathon API terms.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Run it locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+cp .env.example .env.local   # add your keys
+npm run dev
+```
 
-## Learn More
+`.env.local`:
 
-To learn more about Next.js, take a look at the following resources:
+```
+ANTHROPIC_API_KEY=...        # Claude API key
+QLOO_API_KEY=...             # Qloo hackathon key
+QLOO_BASE_URL=https://hackathon.api.qloo.com
+# optional
+TASTECRAFT_MODEL=claude-opus-5-5
+LIVE_RUNS_PER_IP_PER_HOUR=4
+LIVE_RUNS_DAILY_CAP=80
+LIVE_RUNS_MAX_CONCURRENT=3
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Record an instant replay from a real run (stored locally, not committed):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run record-demo -- "Casa Lucio" "Madrid" "Fill quiet weeknights" http://localhost:3000
+```
 
-## Deploy on Vercel
+## Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Next.js 16 (App Router) · React 19 · Tailwind CSS 4 · Anthropic TypeScript SDK (tool runner, adaptive thinking) · Zod · Leaflet + OpenStreetMap · ngeohash.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Who built it
+
+Antonio González Fernández — Business Administration + Data Science student (CUNEF, Madrid). Tastecraft grows out of building [Supplora](https://www.supplora.app), an AI tool already in daily use by a restaurant in Spain that reads supplier delivery notes and pushes them into the restaurant's ERP. Talking to restaurant owners made the gap obvious: they have the purchasing data, but no way to know what their own guests actually want.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

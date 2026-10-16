@@ -48,6 +48,7 @@ export type LiveState = {
   baseline?: string;
   playbook?: Playbook;
   demographics?: { age: Record<string, number>; gender: Record<string, number> };
+  compare?: { a: string; b: string; tags: { name: string; score?: number }[] };
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
 };
 
@@ -61,7 +62,18 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
       {(live.restaurant || p) && (
         <section className="rise overflow-hidden rounded-2xl border border-line bg-olive text-paper">
           <div className="grain px-6 py-6 sm:px-8 sm:py-8">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-paper/70">Taste playbook</p>
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-paper/70">Taste playbook</p>
+              {p && !running && (
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="no-print inline-flex items-center gap-1.5 rounded-full border border-paper/30 px-3 py-1 text-xs text-paper/90 transition hover:bg-paper/10"
+                >
+                  <IconDownload size={13} /> Save as PDF
+                </button>
+              )}
+            </div>
             <h2 className="font-display mt-1 text-3xl leading-tight sm:text-4xl">
               {p?.restaurant.name ?? live.restaurant?.name}
             </h2>
@@ -161,6 +173,22 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
               ))}
             </ol>
           ) : null}
+        </Section>
+      )}
+
+      {live.compare && live.compare.tags.length > 0 && (
+        <Section icon={<IconGap size={16} />} kicker="Head-to-head" title={`What sets your crowd apart from ${live.compare.b}`}>
+          <p className="mb-3 text-[13px] text-ink-2">
+            Qloo’s comparison of the two audiences: the taste signals that most distinguish {live.compare.a}’s guests from {live.compare.b}’s.
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {live.compare.tags.map((t) => (
+              <li key={t.name} className="inline-flex items-center gap-2 rounded-full border border-line bg-paper/60 px-3 py-1 text-sm">
+                {t.name}
+                {typeof t.score === "number" && <span className="text-[11px] tabular-nums text-muted">{Math.round(t.score * 100)}</span>}
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
 

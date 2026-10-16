@@ -133,6 +133,27 @@ export async function audienceDemographics(entityId: string): Promise<Demographi
   return { age: q.age ?? {}, gender: q.gender ?? {} };
 }
 
+// --- 2d. Head-to-head: what distinguishes the restaurant's audience from a rival's
+
+export type CompareTag = { name: string; score?: number; type?: string };
+
+export async function compareAudiences(opts: { a: string; b: string; city: string }): Promise<CompareTag[]> {
+  const json = await qlooGet<{ results?: { tags?: Array<{ name?: string; tag_id?: string; subtype?: string; query?: { score?: number } }> } }>(
+    "/v2/analysis/compare",
+    {
+      "a.signal.interests.entities": opts.a,
+      "b.signal.interests.entities": opts.b,
+      "filter.location.query": opts.city,
+      take: 20,
+    },
+  );
+  return (json.results?.tags ?? []).map((t) => ({
+    name: String(t.name ?? t.tag_id ?? ""),
+    score: typeof t.query?.score === "number" ? t.query.score : undefined,
+    type: t.subtype,
+  }));
+}
+
 // --- 3. Taste gaps -------------------------------------------------------------
 // Tags that are strongly over-represented among the local places your guests love,
 // weighted by Qloo affinity, minus the tags your own restaurant already has.

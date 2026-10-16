@@ -29,7 +29,7 @@ const timestamp = () => Date.now();
 export type DemoSummary = { slug: string; restaurant: string; city: string; goal?: string; recordedAt: string };
 
 export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] }) {
-  const [form, setForm] = useState<AgentRequest>({ restaurant: "", city: "", goal: GOALS[0] });
+  const [form, setForm] = useState<AgentRequest>({ restaurant: "", city: "", goal: GOALS[0], language: "English" });
   const [phase, setPhase] = useState<Phase>("idle");
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +91,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
+      <header className="no-print mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5" aria-label="Tastecraft home">
           <Logo />
           <span className="font-display text-xl tracking-tight">Tastecraft</span>
@@ -100,7 +100,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-20 sm:px-6">
-        <section className={`grid gap-10 ${started ? "py-4" : "py-10 sm:py-16"} lg:grid-cols-[1.1fr_1fr] lg:items-center`}>
+        <section className={`no-print grid gap-10 ${started ? "py-4" : "py-10 sm:py-16"} lg:grid-cols-[1.1fr_1fr] lg:items-center`}>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta">
               For independent restaurants
@@ -162,6 +162,23 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                 ))}
               </div>
             </fieldset>
+            <div className="mt-4 flex items-center gap-3 text-xs text-ink-2">
+              <span>Playbook language</span>
+              <div role="radiogroup" aria-label="Playbook language" className="inline-flex rounded-full border border-line bg-paper/60 p-0.5">
+                {(["English", "Español"] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    role="radio"
+                    aria-checked={(form.language ?? "English") === l}
+                    onClick={() => setForm({ ...form, language: l })}
+                    className={`rounded-full px-3 py-1 transition ${(form.language ?? "English") === l ? "bg-ink text-paper" : "text-ink-2 hover:text-ink"}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               type="submit"
               disabled={phase === "running"}
@@ -203,7 +220,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
         <div ref={resultsRef} className="scroll-mt-4">
           {started && (
             <div className="grid gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
-              <div className="lg:sticky lg:top-4">
+              <div className="no-print lg:sticky lg:top-4">
                 <Timeline items={items} running={phase === "running"} elapsedMs={elapsed} />
               </div>
               <div>
@@ -235,7 +252,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
         </div>
       </main>
 
-      <footer className="border-t border-line py-6 text-center text-xs text-muted">
+      <footer className="no-print border-t border-line py-6 text-center text-xs text-muted">
         Built for the Qloo Agentic Hackathon · Taste data by Qloo · Reasoning by Claude
       </footer>
     </div>
@@ -284,6 +301,9 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         break;
       case "taste_tags":
         live.tags[ev.family] = ev.tags;
+        break;
+      case "compare":
+        live.compare = { a: ev.a, b: ev.b, tags: ev.tags };
         break;
       case "playbook":
         live.playbook = ev.playbook;

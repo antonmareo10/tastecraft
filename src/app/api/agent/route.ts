@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     lens: body.lens
       ? { age: clean(body.lens.age, 20) || undefined, gender: clean(body.lens.gender, 10) || undefined }
       : undefined,
+    language: body.language === "Español" ? "Español" : "English",
   };
   if (!req.restaurant || !req.city) {
     return Response.json({ error: "restaurant and city are required" }, { status: 400 });

@@ -93,6 +93,7 @@ export type AgentEvent =
   | { type: "heatmap"; cells: HeatCell[]; zones: Zone[]; center: [number, number] }
   | { type: "restaurant"; entity: EntityRef & { lat?: number; lon?: number } }
   | { type: "baseline"; text: string }
+  | { type: "compare"; a: string; b: string; tags: { name: string; score?: number }[] }
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
   | { type: "playbook"; playbook: Playbook }
@@ -104,4 +105,5 @@ export type AgentRequest = {
   city: string;
   goal?: string; // optional free-text goal ("fill Tuesday nights", "launch brunch")
   lens?: { age?: string; gender?: string }; // optional audience lens
+  language?: "English" | "Español";
 };

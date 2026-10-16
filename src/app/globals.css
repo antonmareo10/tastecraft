@@ -105,3 +105,20 @@ body {
 .taste-map .leaflet-tile-pane {
   filter: grayscale(1) sepia(0.28) brightness(1.04) contrast(0.88);
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  section {
+    break-inside: avoid;
+  }
+}

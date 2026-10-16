@@ -10,6 +10,7 @@ import {
   TAG_FAMILIES,
   audienceAffinity,
   audienceDemographics,
+  compareAudiences,
   tasteTags,
   findRestaurant,
   nameZones,
@@ -28,10 +29,11 @@ How you work:
 1. Locate the restaurant with find_restaurant. If several candidates come back, pick the one whose address matches the city; if none matches, say so in a note and work at city level using the concept the owner described.
 2. Build the audience's taste DNA with audience_affinity. Always run "place" (local places the same guests love). Then pick the 3 other domains most useful for the owner's goal (usually artist, brand and one of movie/tv_show/podcast). Call independent tools in parallel.
 3. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
-4. Run taste_gaps to see which cuisines, dishes and formats the guests love nearby that this restaurant does not offer.
-5. Run taste_map to see where in the city people with this taste live and go out.
-6. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
-7. Finish by calling publish_playbook exactly once.
+4. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
+5. Run taste_gaps to see which cuisines, dishes and formats the guests love nearby that this restaurant does not offer.
+6. Run taste_map to see where in the city people with this taste live and go out.
+7. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
+8. Finish by calling publish_playbook exactly once.
 If a tool returns an error or no data, do not retry it more than once; continue with what you have and mention the gap in caveats.
 
 Rules for the playbook:
@@ -41,7 +43,7 @@ Rules for the playbook:
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
 - In caveats, state honestly what the data cannot tell (e.g. missing data, small samples).
-- Write in clear, warm, practical English for a busy owner.
+- Write in clear, warm, practical language for a busy owner, in the language the owner asked for (default English). Keep proper names as they are.
 
 Before each group of tool calls, write one short sentence (max 15 words) saying what you are checking and why. After publish_playbook, reply with a single short sentence.`;
 
@@ -360,6 +362,35 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     },
   });
 
+  const compareTool = betaZodTool({
+    name: "compare_rival",
+    description:
+      "Qloo head-to-head analysis between the restaurant's audience (a) and a rival place's audience (b): returns the taste tags that most distinguish them. Use the rival's entity_id from audience_affinity results.",
+    inputSchema: z.object({ rival_entity_id: z.string(), rival_name: z.string(), city: z.string() }),
+    run: async ({ rival_entity_id, rival_name, city }, ctx) => {
+      const id = ctx?.toolUse.id ?? crypto.randomUUID();
+      emit({ type: "tool_start", id, tool: "compare_rival", label: `Head-to-head with ${rival_name}`, input: { rival_name } });
+      if (!restaurant) {
+        emit({ type: "tool_end", id, tool: "compare_rival", summary: "Needs a restaurant first", error: true });
+        return "Error: call find_restaurant first.";
+      }
+      try {
+        const tags = await compareAudiences({ a: restaurant.entity_id, b: rival_entity_id, city });
+        if (tags.length) emit({ type: "compare", a: restaurant.name, b: rival_name, tags: tags.slice(0, 10) });
+        emit({
+          type: "tool_end",
+          id,
+          tool: "compare_rival",
+          summary: tags.length ? `Distinctive: ${tags.slice(0, 3).map((t) => t.name).join(", ")}` : "No comparison data",
+        });
+        return JSON.stringify({ restaurant: restaurant.name, rival: rival_name, distinguishing_tags: tags.map((t) => ({ tag: t.name, type: t.type, score: t.score })) });
+      } catch (err) {
+        emit({ type: "tool_end", id, tool: "compare_rival", summary: short(err), error: true });
+        return `Error: ${short(err)}`;
+      }
+    },
+  });
+
   const publishTool = betaZodTool({
     name: "publish_playbook",
     description: "Publish the final taste playbook to the restaurant owner. Call exactly once, at the end.",
@@ -375,7 +406,8 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
   });
 
   const goal = req.goal?.trim() || "grow the business";
-  const userMessage = `Restaurant: ${req.restaurant}\nCity: ${req.city}\nOwner's goal: ${goal}${
+  const userMessage = `Restaurant: ${req.restaurant}\nCity: ${req.city}\nOwner's goal: ${goal}
+Playbook language: ${req.language ?? "English"}${
     req.lens?.age || req.lens?.gender ? `\nAudience lens: ${JSON.stringify(req.lens)}` : ""
   }\n\nBuild their taste playbook.`;
 
@@ -383,14 +415,14 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     {
       model: MODEL,
       max_tokens: 16000,
-      max_iterations: 14,
+      max_iterations: 16,
       system: SYSTEM,
       cache_control: { type: "ephemeral" },
       output_config: { effort: "medium" },
       thinking: { type: "adaptive", display: "updates" },
       betas: ["server-side-fallback-2026-07-01", "thinking-display-updates-2026-08-18"],
       fallbacks: "default",
-      tools: [findTool, affinityTool, tagsTool, profileTool, gapsTool, mapTool, publishTool],
+      tools: [findTool, affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, publishTool],
       messages: [{ role: "user", content: userMessage }],
     },
     { signal },
@@ -419,7 +451,7 @@ export async function genericBaseline(req: AgentRequest): Promise<string> {
     messages: [
       {
         role: "user",
-        content: `I own the restaurant "${req.restaurant}" in ${req.city}. My goal: ${req.goal || "grow the business"}. Suggest three dishes to add and one event idea. Plain text, max 90 words, no markdown.`,
+        content: `I own the restaurant "${req.restaurant}" in ${req.city}. My goal: ${req.goal || "grow the business"}. Suggest three dishes to add and one event idea. Plain text, max 90 words, no markdown. Answer in ${req.language ?? "English"}.`,
       },
     ],
   });
