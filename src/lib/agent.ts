@@ -4,8 +4,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { matchConcerts } from "./concerts";
 import { EvidenceLedger } from "./ledger";
 import { QlooError } from "./qloo";
+import type { HarnessError } from "./qloo-harness";
 import {
   DOMAINS,
   TAG_FAMILIES,
@@ -13,7 +15,6 @@ import {
   audienceDemographics,
   compareAudiences,
   nearbyGames,
-  nearbyShows,
   showsConfigured,
   tasteTags,
   findRestaurant,
@@ -25,6 +26,8 @@ import {
   type Lens,
   type RestaurantMatch,
 } from "./qloo-tasks";
+import { DEFAULT_TREND_DAYS, risingNearby } from "./rising";
+import { toTrendLine } from "./trends";
 import type { AgentEvent, AgentRequest, Playbook } from "./types";
 
 const MODEL = process.env.TASTECRAFT_MODEL || "claude-opus-5-5";
@@ -34,17 +37,18 @@ const SYSTEM = `You are Tastecraft, the taste-intelligence analyst for independe
 How you work:
 1. Locate the restaurant with find_restaurant. It auto-selects the best candidate and reports how sure the match is. If the match is ambiguous and another candidate clearly fits the owner's restaurant better (address in the city, same concept), call find_restaurant again with that entity_id. Never switch away from a match the owner confirmed. If nothing matches, say so in a note and work at city level using the concept the owner described.
 2. Build the audience's taste DNA with audience_affinity. Always run "place" (local places the same guests love). Then pick the 3 other domains most useful for the owner's goal (usually artist, brand and one of movie/tv_show/podcast). Call independent tools in parallel.
-3. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
-4. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
-5. Run taste_gaps to see which cuisines, dishes and formats the guests love nearby that this restaurant does not offer.
-6. If the nearby_shows tool is available, run it with the top artists from the music results (and include_sports when a stadium or arena is likely nearby) to find concerts and game days near the restaurant, and turn the best ones into pre- or post-event ideas.
-7. Run taste_map to see where in the city people with this taste live and go out.
-8. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
-9. Finish by calling publish_playbook exactly once.
+3. Once the "place" results are in, run rising_nearby with the restaurant's entity_id plus the 3-4 highest-affinity local places, to see which of them are gaining or losing popularity. Rising peers are evidence of what is working nearby ("copy what's working nearby"); describe them as aggregate popularity trends over the window, never as the cause of anything.
+4. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
+5. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
+6. Run taste_gaps to see which cuisines, dishes and formats the guests love nearby that this restaurant does not offer.
+7. If the nearby_shows tool is available, run it (pass the top artists from the music results; they are only a fallback) and set include_sports when a stadium or arena is likely nearby. It ranks the concerts near the restaurant by fan_match, Qloo's 0-100 affinity of each billed artist for this audience; turn the best-matched ones into pre- or post-event ideas.
+8. Run taste_map to see where in the city people with this taste live and go out.
+9. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
+10. Finish by calling publish_playbook exactly once.
 If a tool returns an error or no data, do not retry it more than once; continue with what you have and mention the gap in caveats.
 
 Rules for the playbook:
-- Every menu move, event and marketing idea must be justified by concrete Qloo evidence: name the places, artists or brands and quote their affinity scores (as 0-100) exactly as the tools returned them. Never invent a score, a place or a statistic.
+- Every menu move, event and marketing idea must be justified by concrete Qloo evidence: name the places, artists or brands and quote their affinity scores (as 0-100) exactly as the tools returned them. Trend changes (percentile points from rising_nearby) and fan_match scores (from nearby_shows) can be cited the same way. Never invent a score, a place or a statistic.
 - Each evidence item has a sentence plus "cites": the exact names (spelled exactly as the tools returned them) and the 0-100 scores you quoted. The server checks every cite against this run's Qloo responses and marks unverifiable facts, so only cite what the tools returned.
 - Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
@@ -141,6 +145,20 @@ Before each group of tool calls, write one short sentence (max 15 words) saying 
 
 function lensFromGoal(req: AgentRequest): Lens | undefined {
   return req.lens && (req.lens.age || req.lens.gender) ? req.lens : undefined;
+}
+
+// Harness failures become plain "Error: ..." text for the model. They never stop the run: a 403 on an
+// optional workflow (e.g. a key without /v2/trending) is a caveat, not a fatal problem.
+function harnessMessage(err: HarnessError, what: string): string {
+  const hint =
+    err.code === "QLOO_AUTH"
+      ? `Qloo refused this request; the key may not include it. Treat ${what} as unavailable and say so in caveats.`
+      : err.code === "QLOO_RATE_LIMIT"
+        ? "Qloo rate limit reached; skip this for now."
+        : err.retryable
+          ? "Temporary Qloo problem; do not retry more than once."
+          : "Continue without it and mention the gap in caveats.";
+  return `${what} unavailable (${err.code}): ${err.message.slice(0, 200)} ${hint}`;
 }
 
 function shortMessage(err: unknown): string {
@@ -487,14 +505,85 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     },
   });
 
+  const risingTool = betaZodTool({
+    name: "rising_nearby",
+    description:
+      "Qloo popularity trends (Qloo's official harness trends workflow over /v2/trending) for 1-5 Qloo place entity_ids: the restaurant plus its highest-affinity local places from audience_affinity, or the rival. For each place: direction (rising, falling, steady or no_data) and the change in popularity percentile points between the first and the last ~30 days of the window. Aggregate popularity, not a cause.",
+    inputSchema: z.object({
+      entity_ids: z.array(z.string()).min(1).max(5).describe("Qloo place entity_ids exactly as find_restaurant / audience_affinity returned them"),
+      days: z.number().int().min(30).max(365).optional().describe("Window length in days, ending today (default 180)"),
+    }),
+    run: async ({ entity_ids, days }, ctx) => {
+      const id = ctx?.toolUse.id ?? crypto.randomUUID();
+      emit({ type: "tool_start", id, tool: "rising_nearby", label: "Which places nearby are rising", input: { entity_ids, days: days ?? DEFAULT_TREND_DAYS } });
+      const r = await risingNearby(entity_ids, days ?? DEFAULT_TREND_DAYS);
+      if (!r.ok && r.kind === "needs_input") {
+        emit({ type: "tool_end", id, tool: "rising_nearby", summary: `Needs clearer input: ${r.message}`, error: true });
+        return `Error: ${r.message}. Pass entity_ids exactly as find_restaurant or audience_affinity returned them.`;
+      }
+      if (!r.ok) {
+        emit({ type: "tool_end", id, tool: "rising_nearby", summary: `Trends unavailable (${r.error.code})`, error: true });
+        return `Error: ${harnessMessage(r.error, "Qloo trends")}`;
+      }
+      const { window } = r;
+      const rows = r.rows.map((row) => ({ s: row, sum: row.summary }));
+      for (const { s, sum } of rows) {
+        ledger.record(s.name, "trends");
+        if (sum.change != null) {
+          ledger.record(s.name, "trends", sum.change);
+          ledger.record(s.name, "trends", Math.abs(sum.change));
+        }
+        if (sum.metric === "percentile" && sum.recent != null) ledger.record(s.name, "trends", sum.recent);
+      }
+      const lines = rows.map(({ s, sum }) => toTrendLine(s, sum));
+      if (lines.length) emit({ type: "trends", series: lines });
+      const moving = rows.filter(({ sum }) => sum.direction === "rising" || sum.direction === "falling");
+      emit({
+        type: "tool_end",
+        id,
+        tool: "rising_nearby",
+        summary: moving.length
+          ? moving
+              .slice(0, 3)
+              .map(({ s, sum }) => `${s.name} ${sum.direction === "rising" ? "↑" : "↓"}${Math.abs(sum.change ?? 0)}`)
+              .join(" · ")
+          : rows.some(({ sum }) => sum.direction === "steady")
+            ? "Steady popularity, no big movers"
+            : "No trend data from Qloo",
+      });
+      return JSON.stringify({
+        window,
+        how: "change = mean popularity percentile (0-100) over the last ~30 days minus the first ~30 days of the data Qloo returned (rank positions gained if Qloo returned only ranks). Steady = within 2 points.",
+        places: rows.map(({ s, sum }) => ({
+          entity_id: s.entityId,
+          name: s.name,
+          direction: sum.direction,
+          change: sum.change,
+          metric: sum.metric,
+          recent_level: sum.recent,
+          data_points: sum.points.length,
+          from: sum.points[0]?.date ?? null,
+          to: sum.points.at(-1)?.date ?? null,
+        })),
+        note: "Aggregate popularity trends: they show momentum, not why it happens.",
+      });
+    },
+  });
+
   const showsTool = betaZodTool({
     name: "nearby_shows",
     description:
-      "Live events near the restaurant (Ticketmaster): upcoming concerts within ~25 km by the given artists, plus (if include_sports) big sports fixtures within ~15 km in the next 5 weeks. Use the artists your guests love most (from audience_affinity with domain 'artist').",
+      "Live events near the restaurant (Ticketmaster + Qloo). Lists every concert within ~25 km in the next 5 weeks, ranks the billed artists for this restaurant's audience with Qloo in one call, and returns the best-matched concerts with fan_match (0-100: Qloo affinity of the artist for this audience). With include_sports, also big sports fixtures within ~15 km. `artists` (top artists from audience_affinity with domain 'artist') are only used for a keyword search if Qloo ranking is unavailable.",
     inputSchema: z.object({ artists: z.array(z.string()).min(1).max(8), city: z.string(), include_sports: z.boolean().optional() }),
     run: async ({ artists, city, include_sports }, ctx) => {
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
-      emit({ type: "tool_start", id, tool: "nearby_shows", label: include_sports ? "Concerts and game days nearby" : "Concerts nearby by artists your guests love", input: { artists } });
+      emit({
+        type: "tool_start",
+        id,
+        tool: "nearby_shows",
+        label: include_sports ? "Concerts your guests would love, and game days nearby" : "Concerts nearby that your guests would love",
+        input: { city },
+      });
       try {
         let lat = restaurant?.lat;
         let lon = restaurant?.lon;
@@ -507,20 +596,44 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           emit({ type: "tool_end", id, tool: "nearby_shows", summary: "No location for the restaurant", error: true });
           return "Error: no location available.";
         }
-        const shows = [...(await nearbyShows({ artists, lat, lon })), ...(include_sports ? await nearbyGames({ lat, lon }) : [])];
+        const match = await matchConcerts({ lat, lon, city, restaurantId: restaurant?.entity_id, artists });
+        const games = include_sports ? await nearbyGames({ lat, lon }) : [];
+        const shows = [...match.shows, ...games];
         for (const sh of shows) {
-          ledger.record(sh.artist, "ticketmaster");
+          ledger.record(sh.artist, "ticketmaster", sh.fan_match ?? null);
           ledger.record(sh.venue, "ticketmaster");
           ledger.record(sh.event, "ticketmaster");
         }
+        for (const sc of match.scores) {
+          if (sc.fanMatch == null) continue;
+          ledger.record(sc.input, "qloo_rank", sc.fanMatch);
+          ledger.record(sc.name, "qloo_rank", sc.fanMatch);
+        }
         if (shows.length) emit({ type: "shows", shows });
+        const top = match.shows[0];
         emit({
           type: "tool_end",
           id,
           tool: "nearby_shows",
-          summary: shows.length ? `${shows.length} upcoming shows · next: ${shows[0].artist}, ${shows[0].date}` : "No upcoming shows nearby",
+          summary:
+            match.strategy === "qloo_rank"
+              ? top
+                ? `${match.shows.length} concerts ranked for your crowd · best: ${top.artist}${top.fan_match != null ? ` (fan match ${top.fan_match})` : ""}${games.length ? ` · ${games.length} game days` : ""}`
+                : (match.note ?? "No matched concerts nearby")
+              : shows.length
+                ? `${shows.length} upcoming shows (keyword search) · next: ${shows[0].artist}, ${shows[0].date}`
+                : "No upcoming shows nearby",
         });
-        return JSON.stringify(shows);
+        return JSON.stringify({
+          strategy: match.strategy,
+          how:
+            match.strategy === "qloo_rank"
+              ? "Concerts are ordered by fan_match: Qloo's affinity (0-100) of the billed artist for this restaurant's audience, from one ranking call, so the scores are comparable. Cite fan_match as the score."
+              : "Qloo ranking was unavailable, so these are keyword matches for the artists you supplied, without fan_match.",
+          note: match.note,
+          artists_not_matched_in_qloo: match.dropped.length ? match.dropped : undefined,
+          shows: shows.map((s) => ({ artist: s.artist, event: s.event, venue: s.venue, date: s.date, distance_km: s.distance_km, kind: s.kind, fan_match: s.fan_match })),
+        });
       } catch (err) {
         emit({ type: "tool_end", id, tool: "nearby_shows", summary: short(err), error: true });
         return `Error: ${short(err)}`;
@@ -602,7 +715,7 @@ Owner's question: ${fu.question}`
       fallbacks: "default",
       stream: true,
       tools: fu
-        ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, answerTool]
+        ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, risingTool, answerTool]
         : [
             findTool,
             affinityTool,
@@ -611,6 +724,7 @@ Owner's question: ${fu.question}`
             compareTool,
             gapsTool,
             mapTool,
+            risingTool,
             ...(showsConfigured() ? [showsTool] : []),
             publishTool,
           ],
