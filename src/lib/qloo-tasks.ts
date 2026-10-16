@@ -314,6 +314,19 @@ export function showsConfigured(): boolean {
   return Boolean(process.env.TICKETMASTER_API_KEY);
 }
 
+// Ticketmaster lists test events, stadium tours, parking passes and tribute nights next to real shows.
+const NOT_A_SHOW = /\b(test|tribute|tour of|stadium tour|classic tour|parking|suite|premium seating|season tickets?|membership|package|tailgate|karaoke|dance party|candlelight|experience|night of|celebration of)\b/i;
+const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+type TmEvent = {
+  name?: string;
+  url?: string;
+  distance?: number;
+  dates?: { start?: { localDate?: string } };
+  classifications?: Array<{ genre?: { name?: string } }>;
+  _embedded?: { venues?: Array<{ name?: string }>; attractions?: Array<{ name?: string }> };
+};
+
 export async function nearbyShows(opts: { artists: string[]; lat: number; lon: number; radiusKm?: number }): Promise<Show[]> {
   const key = process.env.TICKETMASTER_API_KEY;
   if (!key) return [];
@@ -327,22 +340,15 @@ export async function nearbyShows(opts: { artists: string[]; lat: number; lon: n
     url.searchParams.set("radius", String(opts.radiusKm ?? 25));
     url.searchParams.set("unit", "km");
     url.searchParams.set("sort", "date,asc");
-    url.searchParams.set("size", "3");
+    url.searchParams.set("size", "10");
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) continue;
-      const j = (await res.json()) as {
-        _embedded?: {
-          events?: Array<{
-            name?: string;
-            url?: string;
-            distance?: number;
-            dates?: { start?: { localDate?: string } };
-            _embedded?: { venues?: Array<{ name?: string }> };
-          }>;
-        };
-      };
-      for (const e of j._embedded?.events ?? []) {
+      const j = (await res.json()) as { _embedded?: { events?: TmEvent[] } };
+      const real = (j._embedded?.events ?? []).filter(
+        (e) => !NOT_A_SHOW.test(e.name ?? "") && (e._embedded?.attractions ?? []).some((a) => norm(a.name ?? "") === norm(artist)),
+      );
+      for (const e of real.slice(0, 2)) {
         shows.push({
           artist,
           event: e.name ?? artist,
@@ -357,7 +363,17 @@ export async function nearbyShows(opts: { artists: string[]; lat: number; lon: n
       // ignore one artist's failure
     }
   }
-  return shows.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+  return dedupe(shows).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+}
+
+function dedupe(shows: Show[]): Show[] {
+  const seen = new Set<string>();
+  return shows.filter((s) => {
+    const k = `${norm(s.event)}|${s.date}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 // Big sports fixtures near the restaurant in the next ~5 weeks (game-day menus).
@@ -375,22 +391,16 @@ export async function nearbyGames(opts: { lat: number; lon: number; radiusKm?: n
   url.searchParams.set("startDateTime", start.toISOString().slice(0, 19) + "Z");
   url.searchParams.set("endDateTime", end.toISOString().slice(0, 19) + "Z");
   url.searchParams.set("sort", "date,asc");
-  url.searchParams.set("size", "10");
+  url.searchParams.set("size", "30");
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
-    const j = (await res.json()) as {
-      _embedded?: {
-        events?: Array<{
-          name?: string;
-          url?: string;
-          distance?: number;
-          dates?: { start?: { localDate?: string } };
-          _embedded?: { venues?: Array<{ name?: string }>; attractions?: Array<{ name?: string }> };
-        }>;
-      };
-    };
-    return (j._embedded?.events ?? []).map((e) => ({
+    const j = (await res.json()) as { _embedded?: { events?: TmEvent[] } };
+    const games = (j._embedded?.events ?? []).filter((e) => {
+      const genre = e.classifications?.[0]?.genre?.name ?? "";
+      return !NOT_A_SHOW.test(e.name ?? "") && !/^(miscellaneous|undefined)$/i.test(genre);
+    });
+    return dedupe(games.map((e) => ({
       artist: e._embedded?.attractions?.[0]?.name ?? e.name ?? "Game",
       event: e.name ?? "Game",
       venue: e._embedded?.venues?.[0]?.name ?? "",
@@ -398,7 +408,7 @@ export async function nearbyGames(opts: { lat: number; lon: number; radiusKm?: n
       url: e.url,
       distance_km: typeof e.distance === "number" ? Number(e.distance.toFixed(1)) : undefined,
       kind: "sports" as const,
-    }));
+    }))).slice(0, 8);
   } catch {
     return [];
   }

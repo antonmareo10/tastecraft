@@ -92,6 +92,7 @@ TASTECRAFT_MODEL=claude-opus-5-5
 LIVE_RUNS_PER_IP_PER_HOUR=4
 LIVE_RUNS_DAILY_CAP=80
 LIVE_RUNS_MAX_CONCURRENT=3
+TICKETMASTER_API_KEY=...     # concerts by your guests' favorite artists + game days nearby
 ```
 
 Record an instant replay from a real run (stored locally, not committed):
