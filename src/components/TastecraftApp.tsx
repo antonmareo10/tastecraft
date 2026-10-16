@@ -377,7 +377,7 @@ function Logo() {
 
 function HowItWorks() {
   const steps = [
-    ["Find", "Locates your restaurant inside Qloo’s taste graph of 250M+ places, brands, artists and titles."],
+    ["Find", "Locates your restaurant inside Qloo’s taste graph of hundreds of millions of places, brands, artists and titles."],
     ["Profile", "Reads what your guests also love — nearby places, music, brands, movies — with real affinity scores."],
     ["Map", "Draws where people with your guests’ taste live and go out, neighborhood by neighborhood."],
     ["Act", "Turns it into three dishes to test, an event, a ready-to-post campaign and a supplier shopping list."],
