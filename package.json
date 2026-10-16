@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:fixture": "node scripts/dev-mode.mjs fixture",
+    "dev:mock": "node scripts/dev-mode.mjs mock",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
