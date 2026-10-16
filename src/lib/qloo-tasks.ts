@@ -308,7 +308,7 @@ export async function nameZones(cells: HeatCell[]): Promise<Zone[]> {
 // If TICKETMASTER_API_KEY is set, find upcoming concerts near the restaurant by artists
 // the audience loves, so the owner can plan pre-/post-show menus.
 
-export type Show = { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number };
+export type Show = { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number; kind?: "music" | "sports" };
 
 export function showsConfigured(): boolean {
   return Boolean(process.env.TICKETMASTER_API_KEY);
@@ -350,6 +350,7 @@ export async function nearbyShows(opts: { artists: string[]; lat: number; lon: n
           date: e.dates?.start?.localDate ?? "",
           url: e.url,
           distance_km: typeof e.distance === "number" ? Number(e.distance.toFixed(1)) : undefined,
+          kind: "music",
         });
       }
     } catch {
@@ -357,4 +358,48 @@ export async function nearbyShows(opts: { artists: string[]; lat: number; lon: n
     }
   }
   return shows.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+}
+
+// Big sports fixtures near the restaurant in the next ~5 weeks (game-day menus).
+export async function nearbyGames(opts: { lat: number; lon: number; radiusKm?: number }): Promise<Show[]> {
+  const key = process.env.TICKETMASTER_API_KEY;
+  if (!key) return [];
+  const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
+  const start = new Date();
+  const end = new Date(start.getTime() + 35 * 24 * 3600 * 1000);
+  url.searchParams.set("apikey", key);
+  url.searchParams.set("classificationName", "sports");
+  url.searchParams.set("latlong", `${opts.lat},${opts.lon}`);
+  url.searchParams.set("radius", String(opts.radiusKm ?? 15));
+  url.searchParams.set("unit", "km");
+  url.searchParams.set("startDateTime", start.toISOString().slice(0, 19) + "Z");
+  url.searchParams.set("endDateTime", end.toISOString().slice(0, 19) + "Z");
+  url.searchParams.set("sort", "date,asc");
+  url.searchParams.set("size", "10");
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const j = (await res.json()) as {
+      _embedded?: {
+        events?: Array<{
+          name?: string;
+          url?: string;
+          distance?: number;
+          dates?: { start?: { localDate?: string } };
+          _embedded?: { venues?: Array<{ name?: string }>; attractions?: Array<{ name?: string }> };
+        }>;
+      };
+    };
+    return (j._embedded?.events ?? []).map((e) => ({
+      artist: e._embedded?.attractions?.[0]?.name ?? e.name ?? "Game",
+      event: e.name ?? "Game",
+      venue: e._embedded?.venues?.[0]?.name ?? "",
+      date: e.dates?.start?.localDate ?? "",
+      url: e.url,
+      distance_km: typeof e.distance === "number" ? Number(e.distance.toFixed(1)) : undefined,
+      kind: "sports" as const,
+    }));
+  } catch {
+    return [];
+  }
 }

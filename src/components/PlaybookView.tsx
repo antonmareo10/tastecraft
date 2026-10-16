@@ -284,7 +284,7 @@ export default function PlaybookView({
               </p>
               {(p.experience.show_tieins?.length ?? 0) > 0 && (
                 <>
-                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Concerts nearby</p>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Concerts & game days nearby</p>
                   <ul className="mt-2 space-y-2">
                     {p.experience.show_tieins!.map((sh) => {
                       const live = liveShows?.find((x) => x.artist === sh.artist && x.date === sh.date);
