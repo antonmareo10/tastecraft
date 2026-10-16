@@ -68,6 +68,7 @@ export type Playbook = {
     collab_partners: { name: string; why: string }[];
   };
   shopping_list: (Ingredient & { est_cost: number })[];
+  week_plan: { day: string; action: string; owner: string }[];
   caveats: string[];
 };
 
@@ -97,6 +98,7 @@ export type AgentEvent =
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
   | { type: "playbook"; playbook: Playbook }
+  | { type: "answer"; question: string; answer: string; evidence: string[] }
   | { type: "error"; message: string }
   | { type: "done"; elapsed_ms: number };
 
@@ -106,4 +108,9 @@ export type AgentRequest = {
   goal?: string; // optional free-text goal ("fill Tuesday nights", "launch brunch")
   lens?: { age?: string; gender?: string }; // optional audience lens
   language?: "English" | "Español";
+  followup?: {
+    question: string;
+    restaurant: { entity_id: string; name: string; tags?: string[] };
+    playbook_headline?: string;
+  };
 };

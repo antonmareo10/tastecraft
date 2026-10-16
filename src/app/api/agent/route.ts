@@ -25,6 +25,20 @@ export async function POST(request: Request) {
       ? { age: clean(body.lens.age, 20) || undefined, gender: clean(body.lens.gender, 10) || undefined }
       : undefined,
     language: body.language === "Español" ? "Español" : "English",
+    followup:
+      body.followup && typeof body.followup.question === "string" && body.followup.restaurant?.entity_id
+        ? {
+            question: clean(body.followup.question, 300),
+            restaurant: {
+              entity_id: clean(body.followup.restaurant.entity_id, 80),
+              name: clean(body.followup.restaurant.name, 80),
+              tags: Array.isArray(body.followup.restaurant.tags)
+                ? body.followup.restaurant.tags.slice(0, 15).map((t) => clean(t, 40))
+                : [],
+            },
+            playbook_headline: clean(body.followup.playbook_headline, 240) || undefined,
+          }
+        : undefined,
   };
   if (!req.restaurant || !req.city) {
     return Response.json({ error: "restaurant and city are required" }, { status: 400 });
@@ -67,7 +81,7 @@ export async function POST(request: Request) {
           closed = true;
         }
       };
-      const baseline = genericBaseline(req)
+      const baseline = (req.followup ? Promise.reject() : genericBaseline(req))
         .then((text) => emit({ type: "baseline", text }))
         .catch(() => undefined);
       try {

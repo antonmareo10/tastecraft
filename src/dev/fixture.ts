@@ -62,6 +62,13 @@ export const FIXTURE: AgentEvent[] = [
     experience: { event_idea: "Sample event title", event_why: "Layout text.", playlist: ["Sample Artist A", "Sample Artist B"], ambience: "Layout text." },
     marketing: { target_zones: [ { name: "Malasaña", reason: "Layout text." }, { name: "Lavapiés", reason: "Layout text." }, { name: "Chamberí", reason: "Layout text." } ], instagram_post: "Sample post text #madrid", collab_partners: [ { name: "Sample partner", why: "Layout text." } ] },
     shopping_list: [ { item: "Sample item", qty: 3, unit: "kg", supplier_category: "Produce", est_cost: 12.4 }, { item: "Sample item 2", qty: 6, unit: "bottles", supplier_category: "Drinks", est_cost: 54 } ],
+    week_plan: [
+      { day: "Mon", action: "Order vermouth and produce for the test week", owner: "Owner" },
+      { day: "Tue", action: "Prep and taste the three new dishes", owner: "Kitchen" },
+      { day: "Wed", action: "Launch specials and post the board", owner: "Marketing" },
+      { day: "Thu", action: "Run the event", owner: "Front of house" },
+      { day: "Sun", action: "Review sales of each new dish", owner: "Owner" },
+    ],
     caveats: ["[DEV FIXTURE] synthetic data"],
   } },
   { type: "tool_end", id: "t6", tool: "publish_playbook", summary: "Playbook ready" },

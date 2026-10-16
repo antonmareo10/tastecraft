@@ -6,6 +6,7 @@ import type { AgentEvent, AgentRequest } from "@/lib/types";
 import { readNdjson } from "@/lib/ndjson";
 import Timeline, { type Step, type TimelineItem } from "./Timeline";
 import PlaybookView, { type LiveState } from "./PlaybookView";
+import FollowUp from "./FollowUp";
 import { IconArrow, IconSearch } from "./icons";
 
 const GOALS = [
@@ -245,6 +246,16 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                   </div>
                 )}
                 <PlaybookView live={live} running={phase === "running"} />
+                {phase === "done" && live.playbook && live.restaurant && (
+                  <div className="mt-5">
+                    <FollowUp
+                      restaurant={live.restaurant}
+                      city={form.city}
+                      headline={live.playbook.headline}
+                      language={form.language}
+                    />
+                  </div>
+                )}
                 {phase === "running" && !live.restaurant && !error && <SkeletonCards />}
               </div>
             </div>

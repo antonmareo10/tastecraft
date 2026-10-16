@@ -286,6 +286,8 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
 
           <ShoppingList playbook={p} />
 
+          {p.week_plan?.length > 0 && <WeekPlan playbook={p} />}
+
           {live.baseline && <Compare baseline={live.baseline} playbook={p} />}
 
           {p.caveats.length > 0 && (
@@ -301,6 +303,81 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
         </>
       )}
     </div>
+  );
+}
+
+const DAY_INDEX: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+function nextMonday(from: Date): Date {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const delta = (8 - d.getDay()) % 7 || 7;
+  d.setDate(d.getDate() + delta);
+  return d;
+}
+
+function icsDate(d: Date): string {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function icsEscape(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+function WeekPlan({ playbook: p }: { playbook: Playbook }) {
+  const items = [...p.week_plan].sort((a, b) => (DAY_INDEX[a.day] ?? 9) - (DAY_INDEX[b.day] ?? 9));
+  const download = () => {
+    const monday = nextMonday(new Date());
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Tastecraft//Launch plan//EN"];
+    items.forEach((it, i) => {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + (DAY_INDEX[it.day] ?? 0));
+      const end = new Date(day);
+      end.setDate(day.getDate() + 1);
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:tastecraft-${i}-${icsDate(day)}@tastecraft`,
+        `DTSTAMP:${icsDate(monday)}T000000Z`,
+        `DTSTART;VALUE=DATE:${icsDate(day)}`,
+        `DTEND;VALUE=DATE:${icsDate(end)}`,
+        `SUMMARY:${icsEscape(`${p.restaurant.name}: ${it.action}`)}`,
+        `DESCRIPTION:${icsEscape(`Owner: ${it.owner}. From your Tastecraft playbook.`)}`,
+        "END:VEVENT",
+      );
+    });
+    lines.push("END:VCALENDAR");
+    const blob = new Blob([lines.join("\r\n")], { type: "text/calendar" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tastecraft-launch-week.ics";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <Section
+      icon={<IconSpark size={16} />}
+      kicker="Next week"
+      title="Your 7-day launch plan"
+      aside={
+        <button
+          type="button"
+          onClick={download}
+          className="no-print inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
+        >
+          <IconDownload size={14} /> Add to calendar
+        </button>
+      }
+    >
+      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {items.map((it, i) => (
+          <li key={`${it.day}-${i}`} className="rounded-xl border border-line bg-paper/50 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-terracotta">{it.day}</p>
+            <p className="mt-1 text-sm leading-snug">{it.action}</p>
+            <p className="mt-1 text-[12px] text-muted">{it.owner}</p>
+          </li>
+        ))}
+      </ol>
+    </Section>
   );
 }
 

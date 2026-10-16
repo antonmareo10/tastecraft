@@ -42,6 +42,7 @@ Rules for the playbook:
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
+- week_plan turns everything into next week's schedule (supplier order early in the week, launch, posts timed to when the audience goes out, the event, a review of results).
 - In caveats, state honestly what the data cannot tell (e.g. missing data, small samples).
 - Write in clear, warm, practical language for a busy owner, in the language the owner asked for (default English). Keep proper names as they are.
 
@@ -97,10 +98,24 @@ const PlaybookSchema = z.object({
       est_cost: z.number(),
     }),
   ),
+  week_plan: z
+    .array(
+      z.object({
+        day: z.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+        action: z.string().describe("One concrete action, max 18 words"),
+        owner: z.string().describe("Who does it: Owner, Kitchen, Front of house or Marketing"),
+      }),
+    )
+    .describe("A 7-day launch plan for next week: order from suppliers, prep, launch dishes, post, run the event, review"),
   caveats: z.array(z.string()),
 });
 
 type Emit = (e: AgentEvent) => void;
+
+const FOLLOWUP_SYSTEM = `You are Tastecraft, the taste-intelligence analyst for an independent restaurant. The owner already received a taste playbook and now asks a follow-up question.
+Use the Qloo tools to get fresh evidence for this specific question (for example, re-run audience_affinity or taste_tags with a demographic lens, or taste_map). Call independent tools in parallel and keep it to the few calls the question needs.
+Then call answer_owner exactly once with a direct, practical answer (max 160 words) and 2-4 concrete Qloo facts with scores exactly as the tools returned them. Never invent data. Answer in the language the owner asked for (default English).
+Before each group of tool calls, write one short sentence (max 15 words) saying what you are checking.`;
 
 function lensFromGoal(req: AgentRequest): Lens | undefined {
   return req.lens && (req.lens.age || req.lens.gender) ? req.lens : undefined;
@@ -114,7 +129,10 @@ function short(err: unknown): string {
 
 export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<void> {
   const client = new Anthropic();
-  let restaurant: RestaurantMatch | null = null;
+  const fu = req.followup;
+  let restaurant: RestaurantMatch | null = fu
+    ? { entity_id: fu.restaurant.entity_id, name: fu.restaurant.name, tags: fu.restaurant.tags, all_tags: fu.restaurant.tags ?? [] }
+    : null;
   let published = false;
 
   const findTool = betaZodTool({
@@ -405,25 +423,54 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     },
   });
 
+  const answerTool = betaZodTool({
+    name: "answer_owner",
+    description: "Deliver the answer to the owner's follow-up question. Call exactly once, at the end.",
+    inputSchema: z.object({
+      answer: z.string().describe("Direct, practical answer, max 160 words"),
+      evidence: z.array(z.string()).describe("2-4 concrete Qloo facts with scores"),
+    }),
+    run: async ({ answer, evidence }, ctx) => {
+      const id = ctx?.toolUse.id ?? crypto.randomUUID();
+      emit({ type: "tool_start", id, tool: "answer_owner", label: "Answering your question", input: {} });
+      published = true;
+      emit({ type: "answer", question: fu?.question ?? "", answer, evidence });
+      emit({ type: "tool_end", id, tool: "answer_owner", summary: "Answer ready" });
+      return "Delivered.";
+    },
+  });
+
   const goal = req.goal?.trim() || "grow the business";
   const userMessage = `Restaurant: ${req.restaurant}\nCity: ${req.city}\nOwner's goal: ${goal}
 Playbook language: ${req.language ?? "English"}${
     req.lens?.age || req.lens?.gender ? `\nAudience lens: ${JSON.stringify(req.lens)}` : ""
   }\n\nBuild their taste playbook.`;
 
+  const followupMessage = fu
+    ? `Restaurant: ${fu.restaurant.name} (Qloo entity_id ${fu.restaurant.entity_id})
+City: ${req.city}
+Tags: ${(fu.restaurant.tags ?? []).join(", ")}
+Playbook headline so far: ${fu.playbook_headline ?? "n/a"}
+Answer language: ${req.language ?? "English"}
+
+Owner's question: ${fu.question}`
+    : null;
+
   const runner = client.beta.messages.toolRunner(
     {
       model: MODEL,
       max_tokens: 16000,
-      max_iterations: 16,
-      system: SYSTEM,
+      max_iterations: fu ? 8 : 16,
+      system: fu ? FOLLOWUP_SYSTEM : SYSTEM,
       cache_control: { type: "ephemeral" },
       output_config: { effort: "medium" },
       thinking: { type: "adaptive", display: "updates" },
       betas: ["server-side-fallback-2026-07-01", "thinking-display-updates-2026-08-18"],
       fallbacks: "default",
-      tools: [findTool, affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, publishTool],
-      messages: [{ role: "user", content: userMessage }],
+      tools: fu
+        ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, answerTool]
+        : [findTool, affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, publishTool],
+      messages: [{ role: "user", content: followupMessage ?? userMessage }],
     },
     { signal },
   );
@@ -438,7 +485,7 @@ Playbook language: ${req.language ?? "English"}${
       return;
     }
   }
-  if (!published) emit({ type: "error", message: "The agent stopped before publishing a playbook. Please try again." });
+  if (!published) emit({ type: "error", message: fu ? "The agent stopped before answering. Please try again." : "The agent stopped before publishing a playbook. Please try again." });
 }
 
 // Same model, no tools, no Qloo: the "generic AI" answer we show side by side.
