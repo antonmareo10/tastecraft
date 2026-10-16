@@ -241,13 +241,34 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                   <div role="alert" className="mb-5 rounded-2xl border border-terracotta/30 bg-terracotta/5 px-5 py-4 text-sm">
                     <p className="font-semibold text-terracotta">The agent hit a problem</p>
                     <p className="mt-1 text-ink-2">{error}</p>
-                    <button
-                      type="button"
-                      onClick={() => run(form)}
-                      className="mt-3 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium"
-                    >
-                      Try again
-                    </button>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => run(form)}
+                        className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium"
+                      >
+                        Try again
+                      </button>
+                      {/* If live mode is down or busy, a judge can still see a real run instantly. */}
+                      {demos.length > 0 && (
+                        <>
+                          <span className="text-xs text-muted">or watch a recorded real run:</span>
+                          {demos.slice(0, 3).map((d) => (
+                            <button
+                              key={d.slug}
+                              type="button"
+                              onClick={() => {
+                                setForm({ restaurant: d.restaurant, city: d.city, goal: d.goal });
+                                run({ restaurant: d.restaurant, city: d.city, goal: d.goal }, d);
+                              }}
+                              className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink"
+                            >
+                              {d.restaurant} →
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
                 <PlaybookView
