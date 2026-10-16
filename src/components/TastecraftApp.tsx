@@ -97,7 +97,12 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
           <Logo />
           <span className="font-display text-xl tracking-tight">Tastecraft</span>
         </Link>
-        <p className="hidden text-xs text-muted sm:block">Qloo taste graph × Claude</p>
+        <nav className="flex items-center gap-4 text-xs text-muted">
+          <span className="hidden sm:inline">Qloo taste graph × Claude</span>
+          <Link href="/about" className="rounded-full border border-line px-3 py-1 text-ink-2 transition hover:border-ink-2/40 hover:text-ink">
+            About
+          </Link>
+        </nav>
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-20 sm:px-6">

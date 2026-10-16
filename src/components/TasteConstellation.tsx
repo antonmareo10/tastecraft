@@ -343,7 +343,7 @@ type Geo = {
   maxChars: number;
 };
 
-function geometry(width: number): Geo {
+function geometry(width: number, sectorCount: number): Geo {
   const W = Math.max(280, Math.round(width));
   const compact = W < 560;
   const H = Math.round(compact ? clamp(W * 1.1, 340, 480) : clamp(W * 0.6, 420, 520));
@@ -360,7 +360,8 @@ function geometry(width: number): Geo {
     rx: Math.min(W / 2 - mx, ry * 1.85),
     ry,
     hubR,
-    rIn: hubR + 22 + nodeMax + 2,
+    // Narrow sectors need a longer inner orbit so the strongest stars have room to breathe.
+    rIn: hubR + 22 + nodeMax + 2 + clamp(sectorCount - 4, 0, 4) * (compact ? 3 : 5),
     nodeMin: compact ? 3.5 : 4,
     nodeMax,
     compact,
@@ -404,7 +405,7 @@ type Layout = {
 };
 
 function computeLayout(model: Model, width: number): Layout {
-  const g = geometry(width);
+  const g = geometry(width, model.sectors.length);
   const { W, H, cx, cy } = g;
   const n = model.sectors.length;
   const step = TAU / n;
@@ -649,21 +650,28 @@ function computeLayout(model: Model, width: number): Layout {
   for (const nd of byPriority) {
     const text = truncate(nd.name, g.maxChars);
     const w = widthOf(text, nd.rank === 0, nd.score);
-    for (const c of candidatesFor(nd, text, w, true)) {
-      if (!inBounds(c.box)) continue;
-      if (placed.some((b) => boxesOverlap(c.box, b, 2))) continue;
-      if (obstacleBoxes.some((b) => boxesOverlap(c.box, b, 1))) continue;
-      if (circles.some((o) => o.key !== nd.key && boxHitsCircle(c.box, o))) continue;
-      nd.label = c.label;
-      nd.labelBox = c.box;
-      placed.push(c.box);
-      break;
+    const options = candidatesFor(nd, text, w, true).filter(
+      (c) =>
+        inBounds(c.box) &&
+        !placed.some((b) => boxesOverlap(c.box, b, 2)) &&
+        !obstacleBoxes.some((b) => boxesOverlap(c.box, b, 1)) &&
+        !boxHitsCircle(c.box, circles[0]),
+    );
+    const others = circles.slice(1).filter((o) => o.key !== nd.key);
+    const pick =
+      options.find((c) => !others.some((o) => boxHitsCircle(c.box, o))) ??
+      // A domain's #1 star always gets its name: it may graze other stars, never hide their core.
+      (nd.rank === 0 ? options.find((c) => !others.some((o) => boxHitsCircle(c.box, { ...o, r: 3 }))) : undefined);
+    if (pick) {
+      nd.label = pick.label;
+      nd.labelBox = pick.box;
+      placed.push(pick.box);
     }
     // Hover/tap label: longer text, only needs to stay inside the canvas.
     const full = truncate(nd.name, g.compact ? 26 : 34);
     const fw = full.length * (fs + 0.5) * 0.58 + 5 + 3 * fs * 0.6; // name + "· score" tspan, always shown
-    const options = candidatesFor(nd, full, fw, false);
-    const fit = options.find((c) => inBounds(c.box)) ?? options[0];
+    const focusOptions = candidatesFor(nd, full, fw, false);
+    const fit = focusOptions.find((c) => inBounds(c.box)) ?? focusOptions[0];
     const shift = Math.max(4 - fit.box.l, 0) - Math.max(fit.box.r - (W - 4), 0);
     nd.focus = { ...fit.label, x: fit.label.x + shift };
     nd.focusBox = { ...fit.box, l: fit.box.l + shift, r: fit.box.r + shift };
