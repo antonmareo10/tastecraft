@@ -24,11 +24,16 @@ const SAMPLES: AgentRequest[] = [
 
 type Phase = "idle" | "running" | "done" | "error";
 
-export default function TastecraftApp() {
+const timestamp = () => Date.now();
+
+export type DemoSummary = { slug: string; restaurant: string; city: string; goal?: string; recordedAt: string };
+
+export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] }) {
   const [form, setForm] = useState<AgentRequest>({ restaurant: "", city: "", goal: GOALS[0] });
   const [phase, setPhase] = useState<Phase>("idle");
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [replay, setReplay] = useState<DemoSummary | null>(null);
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -36,7 +41,7 @@ export default function TastecraftApp() {
 
   useEffect(() => {
     if (phase !== "running") return;
-    const t = setInterval(() => setNow(Date.now()), 500);
+    const t = setInterval(() => setNow(timestamp()), 500);
     return () => clearInterval(t);
   }, [phase]);
 
@@ -44,25 +49,32 @@ export default function TastecraftApp() {
   const doneEvent = events.find((e) => e.type === "done") as Extract<AgentEvent, { type: "done" }> | undefined;
   const elapsed = doneEvent ? doneEvent.elapsed_ms : phase === "running" && startedAt ? now - startedAt : 0;
 
-  async function run(req: AgentRequest) {
+  async function run(req: AgentRequest, demo?: DemoSummary) {
     if (!req.restaurant.trim() || !req.city.trim()) return;
+    setReplay(demo ?? null);
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setEvents([]);
     setError(null);
     setPhase("running");
-    setStartedAt(Date.now());
-    setNow(Date.now());
+    const t0 = timestamp();
+    setStartedAt(t0);
+    setNow(t0);
     requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     try {
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(req),
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`The agent could not start (${res.status}).`);
+      const res = demo
+        ? await fetch(`/api/demo/${demo.slug}`, { signal: controller.signal })
+        : await fetch("/api/agent", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(req),
+            signal: controller.signal,
+          });
+      if (!res.ok || !res.body) {
+        const info = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(info?.error ?? `The agent could not start (${res.status}).`);
+      }
       for await (const ev of readNdjson<AgentEvent>(res.body)) {
         setEvents((prev) => [...prev, ev]);
         if (ev.type === "error") setError(ev.message);
@@ -166,14 +178,15 @@ export default function TastecraftApp() {
               )}
             </button>
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
-              <span>Try:</span>
-              {SAMPLES.map((s) => (
+              <span>{demos.length ? "Instant replays of real runs:" : "Try:"}</span>
+              {(demos.length ? demos : SAMPLES).map((s) => (
                 <button
                   key={s.restaurant}
                   type="button"
                   onClick={() => {
-                    setForm(s);
-                    run(s);
+                    const req = { restaurant: s.restaurant, city: s.city, goal: s.goal };
+                    setForm(req);
+                    run(req, "slug" in s ? s : undefined);
                   }}
                   disabled={phase === "running"}
                   className="inline-flex items-center gap-1 text-ink-2 underline decoration-line underline-offset-4 hover:text-ink hover:decoration-ink-2"
@@ -194,6 +207,13 @@ export default function TastecraftApp() {
                 <Timeline items={items} running={phase === "running"} elapsedMs={elapsed} />
               </div>
               <div>
+                {replay && (
+                  <p className="mb-4 rounded-xl border border-line bg-card px-4 py-2.5 text-[13px] text-ink-2">
+                    Instant replay of a real Tastecraft run recorded on{" "}
+                    {new Date(replay.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{" "}
+                    (live Qloo + Claude data, sped up). Use the form to run it live for any restaurant.
+                  </p>
+                )}
                 {error && (
                   <div role="alert" className="mb-5 rounded-2xl border border-terracotta/30 bg-terracotta/5 px-5 py-4 text-sm">
                     <p className="font-semibold text-terracotta">The agent hit a problem</p>

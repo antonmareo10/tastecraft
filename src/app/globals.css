@@ -100,3 +100,8 @@ body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   background: var(--paper-2);
 }
+
+/* OpenStreetMap tiles toned down to sit on our paper palette. */
+.taste-map .leaflet-tile-pane {
+  filter: grayscale(1) sepia(0.28) brightness(1.04) contrast(0.88);
+}

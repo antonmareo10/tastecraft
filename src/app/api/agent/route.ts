@@ -1,5 +1,7 @@
 import { genericBaseline, runTastecraft } from "@/lib/agent";
+import { acquireLiveRun, clientIp } from "@/lib/limits";
 import { encodeLine } from "@/lib/ndjson";
+import { qlooConfigured } from "@/lib/qloo";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -28,6 +30,31 @@ export async function POST(request: Request) {
   }
 
   const started = Date.now();
+
+  if (process.env.NODE_ENV === "development" && process.env.TASTECRAFT_FIXTURE === "1") {
+    const { FIXTURE } = await import("@/dev/fixture");
+    const fixtureStream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        for (const e of FIXTURE) {
+          controller.enqueue(encodeLine(e));
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        controller.enqueue(encodeLine({ type: "done", elapsed_ms: Date.now() - started }));
+        controller.close();
+      },
+    });
+    return new Response(fixtureStream, { headers: { "content-type": "application/x-ndjson; charset=utf-8" } });
+  }
+
+  if (!qlooConfigured() || !process.env.ANTHROPIC_API_KEY) {
+    return Response.json(
+      { error: "Live mode is not configured on this server yet. Open one of the recorded real runs instead." },
+      { status: 503 },
+    );
+  }
+  const gate = acquireLiveRun(clientIp(request));
+  if (!gate.ok) return Response.json({ error: gate.reason }, { status: 429 });
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let closed = false;
@@ -50,7 +77,11 @@ export async function POST(request: Request) {
       await baseline;
       emit({ type: "done", elapsed_ms: Date.now() - started });
       closed = true;
+      gate.release();
       controller.close();
+    },
+    cancel() {
+      gate.release();
     },
   });
 

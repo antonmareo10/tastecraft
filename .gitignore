@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Recorded Qloo responses must not be published (Qloo hackathon FAQ)
+src/data/demos.json

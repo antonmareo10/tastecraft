@@ -115,8 +115,8 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
 
       {(live.demographics || Object.keys(live.tags).length > 0) && (
         <Section icon={<IconPlate size={16} />} kicker="Cravings & crowd" title="What they crave, and who they are">
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-            <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {(["dishes", "cuisines", "ambience"] as const).map((fam) =>
                 live.tags[fam]?.length ? (
                   <div key={fam} className="rounded-xl border border-line bg-paper/50 p-4">
@@ -126,7 +126,7 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
                     <ul className="space-y-1.5">
                       {live.tags[fam]!.slice(0, 6).map((t) => (
                         <li key={t.name} className="flex items-center justify-between gap-2">
-                          <span className="min-w-0 truncate text-sm">{t.name}</span>
+                          <span className="min-w-0 text-sm leading-snug">{t.name}</span>
                           <AffinityBar value={t.affinity} />
                         </li>
                       ))}

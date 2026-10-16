@@ -36,18 +36,28 @@ export default function TasteMap({
   center: [number, number];
   restaurant?: { name: string; lat?: number; lon?: number };
 }) {
+  const bounds: [[number, number], [number, number]] | undefined = cells.length
+    ? [
+        [Math.min(...cells.map((c) => c.bbox[0])), Math.min(...cells.map((c) => c.bbox[1]))],
+        [Math.max(...cells.map((c) => c.bbox[2])), Math.max(...cells.map((c) => c.bbox[3]))],
+      ]
+    : undefined;
   return (
     <div className="overflow-hidden rounded-xl border border-line">
       <MapContainer
         center={center}
         zoom={12}
+        bounds={bounds}
+        boundsOptions={{ padding: [24, 24] }}
         scrollWheelZoom={false}
         style={{ height: 380, width: "100%" }}
         attributionControl
+        className="taste-map"
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          maxZoom={18}
         />
         {cells.map((c) => (
           <Rectangle
@@ -65,11 +75,6 @@ export default function TasteMap({
             <Tooltip sticky>Taste affinity {Math.round(c.affinity * 100)}</Tooltip>
           </Rectangle>
         ))}
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
-          attribution=""
-          pane="shadowPane"
-        />
         {zones.map((z, i) => (
           <CircleMarker
             key={`${z.label}-${i}`}
@@ -77,7 +82,7 @@ export default function TasteMap({
             radius={7}
             pathOptions={{ color: "#1d1b17", weight: 1.5, fillColor: "#fffdf8", fillOpacity: 1 }}
           >
-            <Tooltip direction="top" offset={[0, -6]} permanent={i < 3}>
+            <Tooltip direction={i % 2 ? "bottom" : "top"} offset={[0, i % 2 ? 6 : -6]} permanent={i < 3}>
               <span className="text-[11px] font-medium">
                 {i + 1}. {z.label}
               </span>
