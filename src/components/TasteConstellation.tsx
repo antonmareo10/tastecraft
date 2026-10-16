@@ -63,10 +63,11 @@ const DOMAIN_COLOR: Record<string, string> = {
 };
 
 /**
- * Slot (angular position inside a sector) -> rank. Angular neighbours never hold
- * consecutive ranks, so the strongest stars do not crowd each other near the hub.
+ * Slot (angular position inside a sector) -> rank. The strongest star sits mid-sector,
+ * under its domain title, and angular neighbours never hold consecutive ranks, so the
+ * strongest stars do not crowd each other near the hub.
  */
-const SLOT_PATTERNS: number[][] = [[], [0], [0, 1], [1, 0, 2], [1, 3, 0, 2], [2, 0, 4, 1, 3], [2, 0, 4, 1, 5, 3]];
+const SLOT_PATTERNS: number[][] = [[], [0], [0, 1], [1, 0, 2], [2, 0, 3, 1], [1, 3, 0, 2, 4], [5, 2, 0, 3, 1, 4]];
 
 const S = Math.SQRT1_2;
 type Anchor = "start" | "middle" | "end";

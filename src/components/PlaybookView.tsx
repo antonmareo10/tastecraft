@@ -117,6 +117,24 @@ export default function PlaybookView({
         </section>
       )}
 
+      {p && !running && (
+        <nav aria-label="Playbook sections" className="no-print sticky top-2 z-[1100] flex flex-wrap gap-2 rounded-full border border-line bg-card/90 p-1.5 backdrop-blur">
+          {[
+            ["act-read", "1 · Read the room"],
+            ["act-moves", "2 · The moves"],
+            ["act-premiere", "3 · Opening night"],
+          ].map(([id, label]) => (
+            <a key={id} href={`#${id}`} className="rounded-full px-3 py-1 text-[13px] text-ink-2 transition hover:bg-paper hover:text-ink">
+              {label}
+            </a>
+          ))}
+        </nav>
+      )}
+
+      {(domains.length > 0 || live.demographics) && (
+        <ActHeader id="act-read" n={1} title="Read the room" subtitle="Who your guests are and what they love, straight from Qloo’s taste graph." />
+      )}
+
       {/* Audience DNA from live Qloo results */}
       {domains.length > 0 && (
         <Section icon={<IconUsers size={16} />} kicker="Audience taste DNA" title="What your guests also love">
@@ -215,6 +233,7 @@ export default function PlaybookView({
 
       {p && (
         <>
+          <ActHeader id="act-moves" n={2} title="The moves" subtitle="What to cook, what to host and who to tell — each backed by evidence." />
           {p.taste_gaps.length > 0 && (
             <Section icon={<IconGap size={16} />} kicker="Taste gaps" title="What locals love that you don’t serve yet">
               <ul className="grid gap-3 md:grid-cols-2">
@@ -326,6 +345,8 @@ export default function PlaybookView({
             </Section>
           </div>
 
+          <ActHeader id="act-premiere" n={3} title="Opening night" subtitle="Everything to launch it next week: print-ready assets, the supplier order and the plan." />
+
           <ShareAssets playbook={p} language={language} />
 
           <ShoppingList playbook={p} />
@@ -347,6 +368,16 @@ export default function PlaybookView({
         </>
       )}
     </div>
+  );
+}
+
+function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: string; subtitle: string }) {
+  return (
+    <header id={id} className="scroll-mt-16 pt-4">
+      <p className="font-display text-sm text-terracotta">Act {n}</p>
+      <h2 className="font-display text-3xl leading-tight sm:text-4xl">{title}</h2>
+      <p className="mt-1 max-w-2xl text-sm text-ink-2">{subtitle}</p>
+    </header>
   );
 }
 
