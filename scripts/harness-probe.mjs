@@ -1,5 +1,5 @@
 // DEV-ONLY: runs every @qloo/qloo-harness workflow through the in-process direct executor against
-// the logging mock (scripts/mock-qloo-harness.mjs) and records, per case, the exact HTTP requests sent
+// the logging mock (scripts/mock-qloo.mjs) and records, per case, the exact HTTP requests sent
 // and the returned envelope (or the thrown QlooWorkflowExecutionError). No real Qloo key is used.
 //
 // Usage: node scripts/harness-probe.mjs [out.json]
@@ -7,7 +7,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createMockQlooServer, mockUuid } from "./mock-qloo-harness.mjs";
+import { createMockQlooServer, mockUuid } from "./mock-qloo.mjs";
 
 const out = process.argv[2];
 const { server, log } = createMockQlooServer({ quiet: true });

@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createMockQlooServer, mockUuid } from "../scripts/mock-qloo-harness.mjs";
+import { createMockQlooServer, mockUuid } from "../scripts/mock-qloo.mjs";
 import {
   compareAudiences,
   describe as describeEntity,

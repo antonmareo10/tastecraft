@@ -24,7 +24,9 @@ const run = (cmd, args, env) => {
 if (mode === "mock") run("node", ["scripts/mock-qloo.mjs"], {});
 run("npx", ["next", "dev"], {
   ...(mode === "fixture" ? { TASTECRAFT_FIXTURE: "1" } : {}),
-  QLOO_BASE_URL: "http://localhost:4010",
+  QLOO_BASE_URL: "http://127.0.0.1:4010",
+  // Qloo's harness (trends, artist ranking) only sends the key to a host that is explicitly trusted.
+  QLOO_TRUSTED_BASE_URL: "http://127.0.0.1:4010",
   QLOO_API_KEY: "mock",
   TICKETMASTER_API_KEY: "",
 });
