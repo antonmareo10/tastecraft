@@ -57,6 +57,15 @@ export default function About() {
             sees or stores information about individual guests.
           </li>
           <li>
+            <strong>Groups, not people.</strong> Qloo scores describe what people who like a restaurant tend to like, in
+            aggregate. Tastecraft never presents them as a prediction about one guest, and keeps Qloo’s facts apart from its
+            own interpretation.
+          </li>
+          <li>
+            <strong>The right restaurant first.</strong> Every match is labelled exact, close or best guess, and the owner
+            can switch to another candidate before relying on the results.
+          </li>
+          <li>
             <strong>Every fact is checked.</strong> The server records every value Qloo returns in a run and verifies each
             cited fact in the playbook against it. Unverifiable claims are flagged, not hidden.
           </li>
