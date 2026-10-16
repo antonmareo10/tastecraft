@@ -303,3 +303,58 @@ export async function nameZones(cells: HeatCell[]): Promise<Zone[]> {
   }
   return zones;
 }
+
+// --- 5. Live music nearby (Ticketmaster Discovery API, optional) ---------------
+// If TICKETMASTER_API_KEY is set, find upcoming concerts near the restaurant by artists
+// the audience loves, so the owner can plan pre-/post-show menus.
+
+export type Show = { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number };
+
+export function showsConfigured(): boolean {
+  return Boolean(process.env.TICKETMASTER_API_KEY);
+}
+
+export async function nearbyShows(opts: { artists: string[]; lat: number; lon: number; radiusKm?: number }): Promise<Show[]> {
+  const key = process.env.TICKETMASTER_API_KEY;
+  if (!key) return [];
+  const shows: Show[] = [];
+  for (const artist of opts.artists.slice(0, 8)) {
+    const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
+    url.searchParams.set("apikey", key);
+    url.searchParams.set("keyword", artist);
+    url.searchParams.set("classificationName", "music");
+    url.searchParams.set("latlong", `${opts.lat},${opts.lon}`);
+    url.searchParams.set("radius", String(opts.radiusKm ?? 25));
+    url.searchParams.set("unit", "km");
+    url.searchParams.set("sort", "date,asc");
+    url.searchParams.set("size", "3");
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const j = (await res.json()) as {
+        _embedded?: {
+          events?: Array<{
+            name?: string;
+            url?: string;
+            distance?: number;
+            dates?: { start?: { localDate?: string } };
+            _embedded?: { venues?: Array<{ name?: string }> };
+          }>;
+        };
+      };
+      for (const e of j._embedded?.events ?? []) {
+        shows.push({
+          artist,
+          event: e.name ?? artist,
+          venue: e._embedded?.venues?.[0]?.name ?? "",
+          date: e.dates?.start?.localDate ?? "",
+          url: e.url,
+          distance_km: typeof e.distance === "number" ? Number(e.distance.toFixed(1)) : undefined,
+        });
+      }
+    } catch {
+      // ignore one artist's failure
+    }
+  }
+  return shows.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+}

@@ -11,6 +11,8 @@ import {
   audienceAffinity,
   audienceDemographics,
   compareAudiences,
+  nearbyShows,
+  showsConfigured,
   tasteTags,
   findRestaurant,
   nameZones,
@@ -31,9 +33,10 @@ How you work:
 3. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
 4. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
 5. Run taste_gaps to see which cuisines, dishes and formats the guests love nearby that this restaurant does not offer.
-6. Run taste_map to see where in the city people with this taste live and go out.
-7. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
-8. Finish by calling publish_playbook exactly once.
+6. If the nearby_shows tool is available, run it with the top artists from the music results to find upcoming concerts near the restaurant, and turn the best ones into pre- or post-show ideas.
+7. Run taste_map to see where in the city people with this taste live and go out.
+8. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
+9. Finish by calling publish_playbook exactly once.
 If a tool returns an error or no data, do not retry it more than once; continue with what you have and mention the gap in caveats.
 
 Rules for the playbook:
@@ -84,6 +87,9 @@ const PlaybookSchema = z.object({
     event_why: z.string(),
     playlist: z.array(z.string()).describe("Artists from the Qloo music results"),
     ambience: z.string(),
+    show_tieins: z
+      .array(z.object({ artist: z.string(), event: z.string(), date: z.string(), venue: z.string(), idea: z.string() }))
+      .describe("Only from nearby_shows results: a pre- or post-show menu or offer per show. Empty array if none."),
   }),
   marketing: z.object({
     target_zones: z.array(z.object({ name: z.string(), reason: z.string() })),
@@ -410,6 +416,42 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     },
   });
 
+  const showsTool = betaZodTool({
+    name: "nearby_shows",
+    description:
+      "Upcoming concerts (Ticketmaster) within ~25 km of the restaurant by the given artists, sorted by date. Use the artists your guests love most (from audience_affinity with domain 'artist').",
+    inputSchema: z.object({ artists: z.array(z.string()).min(1).max(8), city: z.string() }),
+    run: async ({ artists, city }, ctx) => {
+      const id = ctx?.toolUse.id ?? crypto.randomUUID();
+      emit({ type: "tool_start", id, tool: "nearby_shows", label: "Concerts nearby by artists your guests love", input: { artists } });
+      try {
+        let lat = restaurant?.lat;
+        let lon = restaurant?.lon;
+        if (lat == null || lon == null) {
+          const g = await geocodeCity(city);
+          lat = g?.lat;
+          lon = g?.lon;
+        }
+        if (lat == null || lon == null) {
+          emit({ type: "tool_end", id, tool: "nearby_shows", summary: "No location for the restaurant", error: true });
+          return "Error: no location available.";
+        }
+        const shows = await nearbyShows({ artists, lat, lon });
+        if (shows.length) emit({ type: "shows", shows });
+        emit({
+          type: "tool_end",
+          id,
+          tool: "nearby_shows",
+          summary: shows.length ? `${shows.length} upcoming shows · next: ${shows[0].artist}, ${shows[0].date}` : "No upcoming shows nearby",
+        });
+        return JSON.stringify(shows);
+      } catch (err) {
+        emit({ type: "tool_end", id, tool: "nearby_shows", summary: short(err), error: true });
+        return `Error: ${short(err)}`;
+      }
+    },
+  });
+
   const publishTool = betaZodTool({
     name: "publish_playbook",
     description: "Publish the final taste playbook to the restaurant owner. Call exactly once, at the end.",
@@ -470,7 +512,17 @@ Owner's question: ${fu.question}`
       fallbacks: "default",
       tools: fu
         ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, answerTool]
-        : [findTool, affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, publishTool],
+        : [
+            findTool,
+            affinityTool,
+            tagsTool,
+            profileTool,
+            compareTool,
+            gapsTool,
+            mapTool,
+            ...(showsConfigured() ? [showsTool] : []),
+            publishTool,
+          ],
       messages: [{ role: "user", content: followupMessage ?? userMessage }],
     },
     { signal },
@@ -487,6 +539,20 @@ Owner's question: ${fu.question}`
     }
   }
   if (!published) emit({ type: "error", message: fu ? "The agent stopped before answering. Please try again." : "The agent stopped before publishing a playbook. Please try again." });
+}
+
+async function geocodeCity(city: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(city)}`,
+      { headers: { "User-Agent": "Tastecraft/1.0 (Qloo hackathon demo)" }, signal: AbortSignal.timeout(5000) },
+    );
+    if (!res.ok) return null;
+    const [hit] = (await res.json()) as Array<{ lat: string; lon: string }>;
+    return hit ? { lat: Number(hit.lat), lon: Number(hit.lon) } : null;
+  } catch {
+    return null;
+  }
 }
 
 // Same model, no tools, no Qloo: the "generic AI" answer we show side by side.

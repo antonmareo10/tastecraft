@@ -49,11 +49,13 @@ export type LiveState = {
   playbook?: Playbook;
   demographics?: { age: Record<string, number>; gender: Record<string, number> };
   compare?: { a: string; b: string; tags: { name: string; score?: number }[] };
+  shows?: { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number }[];
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
 };
 
 export default function PlaybookView({ live, running }: { live: LiveState; running: boolean }) {
   const p = live.playbook;
+  const liveShows = live.shows;
   const domains = Object.keys(live.dna).filter((d) => live.dna[d]?.length);
 
   return (
@@ -245,6 +247,30 @@ export default function PlaybookView({ live, running }: { live: LiveState; runni
                 <span className="font-semibold">Ambience: </span>
                 {p.experience.ambience}
               </p>
+              {(p.experience.show_tieins?.length ?? 0) > 0 && (
+                <>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Concerts nearby</p>
+                  <ul className="mt-2 space-y-2">
+                    {p.experience.show_tieins!.map((sh) => {
+                      const live = liveShows?.find((x) => x.artist === sh.artist && x.date === sh.date);
+                      return (
+                        <li key={`${sh.artist}-${sh.date}`} className="rounded-lg border border-line bg-paper/60 p-3 text-sm">
+                          <p className="font-semibold">
+                            {sh.artist} · {sh.date} · {sh.venue}
+                            {live?.distance_km != null && <span className="font-normal text-muted"> ({live.distance_km} km)</span>}
+                          </p>
+                          <p className="mt-0.5 leading-snug text-ink-2">{sh.idea}</p>
+                          {live?.url && (
+                            <a href={live.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-olive underline underline-offset-2">
+                              Event page
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
               {p.experience.playlist.length > 0 && (
                 <>
                   <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Playlist seeds</p>

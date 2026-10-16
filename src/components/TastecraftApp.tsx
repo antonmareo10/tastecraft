@@ -18,9 +18,9 @@ const GOALS = [
 ];
 
 const SAMPLES: AgentRequest[] = [
-  { restaurant: "Casa Lucio", city: "Madrid", goal: "Fill quiet weeknights" },
-  { restaurant: "Joe's Pizza", city: "New York", goal: "Win a younger crowd" },
-  { restaurant: "Dishoom", city: "London", goal: "Launch a new seasonal special" },
+  { restaurant: "Katz's Delicatessen", city: "New York", goal: "Fill quiet weeknights" },
+  { restaurant: "Gjelina", city: "Los Angeles", goal: "Win a younger crowd" },
+  { restaurant: "Casa Lucio", city: "Madrid", goal: "Launch a new seasonal special" },
 ];
 
 type Phase = "idle" | "running" | "done" | "error";
@@ -315,6 +315,9 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         break;
       case "compare":
         live.compare = { a: ev.a, b: ev.b, tags: ev.tags };
+        break;
+      case "shows":
+        live.shows = ev.shows;
         break;
       case "playbook":
         live.playbook = ev.playbook;

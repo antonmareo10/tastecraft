@@ -61,6 +61,7 @@ export type Playbook = {
     event_why: string;
     playlist: string[];
     ambience: string;
+    show_tieins?: { artist: string; event: string; date: string; venue: string; idea: string }[];
   };
   marketing: {
     target_zones: { name: string; reason: string }[];
@@ -95,6 +96,7 @@ export type AgentEvent =
   | { type: "restaurant"; entity: EntityRef & { lat?: number; lon?: number } }
   | { type: "baseline"; text: string }
   | { type: "compare"; a: string; b: string; tags: { name: string; score?: number }[] }
+  | { type: "shows"; shows: { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number }[] }
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
   | { type: "playbook"; playbook: Playbook }
