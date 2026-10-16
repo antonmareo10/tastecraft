@@ -10,7 +10,8 @@
     "predev": "node scripts/ensure-demos.mjs",
     "prebuild": "node scripts/ensure-demos.mjs",
     "record-demo": "node scripts/record-demo.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

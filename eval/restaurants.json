@@ -1,0 +1,12 @@
+[
+  { "restaurant": "Katz's Delicatessen", "city": "New York", "goal": "Fill quiet weeknights" },
+  { "restaurant": "Joe's Pizza", "city": "New York", "goal": "Win a younger crowd" },
+  { "restaurant": "Gjelina", "city": "Los Angeles", "goal": "Launch a new seasonal special" },
+  { "restaurant": "AC Barbeque", "city": "Los Angeles", "goal": "Fill quiet weeknights" },
+  { "restaurant": "Au Cheval", "city": "Chicago", "goal": "Grow delivery orders" },
+  { "restaurant": "Franklin Barbecue", "city": "Austin", "goal": "Launch a new seasonal special" },
+  { "restaurant": "Zuni Café", "city": "San Francisco", "goal": "Win a younger crowd" },
+  { "restaurant": "Casa Lucio", "city": "Madrid", "goal": "Fill quiet weeknights" },
+  { "restaurant": "Dishoom", "city": "London", "goal": "Launch a new seasonal special" },
+  { "restaurant": "Mama's Fish House", "city": "Maui", "goal": "Grow delivery orders" }
+]
