@@ -38,6 +38,7 @@ If a tool returns an error or no data, do not retry it more than once; continue 
 
 Rules for the playbook:
 - Every menu move, event and marketing idea must be justified by concrete Qloo evidence: name the places, artists or brands and quote their affinity scores (as 0-100) exactly as the tools returned them. Never invent a score, a place or a statistic.
+- Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
