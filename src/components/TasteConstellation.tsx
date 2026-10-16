@@ -615,30 +615,54 @@ function computeLayout(model: Model, width: number): Layout {
   const widthOf = (text: string, bold: boolean, score: number | null) =>
     text.length * fs * (bold ? 0.58 : 0.54) + (score !== null && !g.compact ? 4 + String(score).length * fs * 0.85 * 0.6 : 0);
 
+  /**
+   * Label spots around a star, most outward first. Each direction also gets a nudged
+   * variant (slid along the star's edge) that is tried only after every primary spot.
+   */
   const candidatesFor = (nd: LaidNode, text: string, w: number, outwardOnly: boolean) => {
     const ux = Math.cos(nd.ang);
     const uy = Math.sin(nd.ang);
     const gp = 4;
-    return LABEL_DIRS.map((dir) => ({ dir, score: dir.dx * ux + dir.dy * uy }))
+    const dirs = LABEL_DIRS.map((dir) => ({ dir, score: dir.dx * ux + dir.dy * uy }))
       .filter((c) => !outwardOnly || c.score > -0.05)
-      .sort((a, b) => b.score - a.score)
-      .map(({ dir }) => {
-        let x: number;
-        let y: number;
-        if (dir.dy === 0) {
-          x = nd.x + dir.dx * (nd.r + gp);
-          y = nd.y + fs * 0.34;
-        } else if (dir.dx === 0) {
-          x = nd.x;
-          y = dir.dy < 0 ? nd.y - nd.r - gp - fs * 0.25 : nd.y + nd.r + gp + fs * 0.8;
-        } else {
-          x = nd.x + Math.sign(dir.dx) * (nd.r * 0.72 + gp * 0.5);
-          y = dir.dy < 0 ? nd.y - nd.r * 0.72 - fs * 0.22 : nd.y + nd.r * 0.72 + fs * 0.74;
-        }
-        const label: Label = { x, y, anchor: dir.anchor, text };
-        return { label, box: textBox(dir.anchor, x, y, w, fs) };
-      });
+      .sort((a, b) => b.score - a.score);
+    const make = (dir: (typeof LABEL_DIRS)[number], nudge: number) => {
+      let x: number;
+      let y: number;
+      if (dir.dy === 0) {
+        // Beside the star: slide up or down, whichever is more outward.
+        x = nd.x + dir.dx * (nd.r + gp);
+        y = nd.y + fs * 0.34 + nudge * (uy < 0 ? -1 : 1) * fs * 0.6;
+      } else if (dir.dx === 0) {
+        // Above/below: slide sideways, toward the outward side.
+        x = nd.x + nudge * (ux < 0 ? -1 : 1) * w * 0.3;
+        y = dir.dy < 0 ? nd.y - nd.r - gp - fs * 0.25 : nd.y + nd.r + gp + fs * 0.8;
+      } else {
+        // Diagonals: move a little further away vertically.
+        x = nd.x + Math.sign(dir.dx) * (nd.r * 0.72 + gp * 0.5);
+        y = (dir.dy < 0 ? nd.y - nd.r * 0.72 - fs * 0.22 : nd.y + nd.r * 0.72 + fs * 0.74) + nudge * dir.dy * fs * 0.5;
+      }
+      const label: Label = { x, y, anchor: dir.anchor, text };
+      return { label, box: textBox(dir.anchor, x, y, w, fs) };
+    };
+    return [...dirs.map(({ dir }) => make(dir, 0)), ...dirs.map(({ dir }) => make(dir, 1))];
   };
+
+  /** A label must read as belonging to its own domain: its centre stays inside the star's sector. */
+  const inOwnSector = (nd: LaidNode, box: Box) => {
+    const theta = Math.atan2((box.t + box.b) / 2 - cy, (box.l + box.r) / 2 - cx);
+    const mid = (nd.a0 + nd.a1) / 2;
+    const diff = Math.atan2(Math.sin(theta - mid), Math.cos(theta - mid));
+    return Math.abs(diff) <= (nd.a1 - nd.a0) / 2 + gap * 0.5;
+  };
+
+  /** How far a label box cuts into other stars (0 = clear). */
+  const intrusion = (box: Box, others: Circle[]) =>
+    others.reduce((sum, o) => {
+      const nx = clamp(o.x, box.l, box.r);
+      const ny = clamp(o.y, box.t, box.b);
+      return sum + Math.max(0, o.r - Math.hypot(nx - o.x, ny - o.y));
+    }, 0);
 
   const byPriority = [...nodes].sort((a, b) => a.rank - b.rank || b.t - a.t);
   const placed: Box[] = [];
@@ -648,17 +672,26 @@ function computeLayout(model: Model, width: number): Layout {
     const options = candidatesFor(nd, text, w, true).filter(
       (c) =>
         inBounds(c.box) &&
+        inOwnSector(nd, c.box) &&
         !placed.some((b) => boxesOverlap(c.box, b, 2)) &&
         !obstacleBoxes.some((b) => boxesOverlap(c.box, b, 1)) &&
         !boxHitsCircle(c.box, circles[0]),
     );
     const others = circles.slice(1).filter((o) => o.key !== nd.key);
-    const pick =
-      options.find((c) => !others.some((o) => boxHitsCircle(c.box, o))) ??
-      // A domain's leading stars keep their names: they may graze other stars, never hide their core.
-      (nd.rank < (g.compact ? 1 : 2)
-        ? options.find((c) => !others.some((o) => boxHitsCircle(c.box, { ...o, r: 3 })))
-        : undefined);
+    let pick = options.find((c) => !others.some((o) => boxHitsCircle(c.box, o)));
+    if (!pick && nd.rank < (g.compact ? 1 : 2)) {
+      // A domain's leading stars keep their names: they may graze other stars (least
+      // intrusion wins) but never hide a star's core.
+      let best = Infinity;
+      for (const c of options) {
+        if (others.some((o) => boxHitsCircle(c.box, { ...o, r: 3.5 }))) continue;
+        const cost = intrusion(c.box, others);
+        if (cost < best - 0.01) {
+          best = cost;
+          pick = c;
+        }
+      }
+    }
     if (pick) {
       nd.label = pick.label;
       nd.labelBox = pick.box;

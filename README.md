@@ -55,6 +55,24 @@ Browser ──POST /api/agent──▶ Next.js route (streams NDJSON events)
 - **Cost and abuse protection.** Live runs are rate-limited per IP, capped per day and limited in concurrency. Recorded real runs replay instantly for visitors.
 - **Qloo data handling.** Responses are cached privately on the server. Recorded runs (which contain Qloo data) are **not** committed to this public repository, per the hackathon API terms.
 
+## Use it from any agent (MCP)
+
+Tastecraft is also an MCP server, so an existing agent — Claude Desktop, Cursor, or a restaurant's own POS assistant — can call it:
+
+```json
+{ "tastecraft": { "url": "https://<deployment>/api/mcp" } }
+```
+
+| Tool | What it returns | Cost |
+|---|---|---|
+| `taste_profile` | The restaurant's Qloo entity, places/artists/brands its guests love (0-100 affinity), dishes/cuisines/vibes they over-index on, age/gender skew | Qloo only, seconds |
+| `taste_playbook` | The full verified playbook (same as the web app) | Qloo + Claude, ~1 min, rate-limited |
+
+## Proof, not claims
+
+- `npm run eval` runs an **ablation**: the same model, same restaurant and goal, with and without Qloo, judged blind with randomized order; it also reports the share of cited facts verified against live Qloo responses. Aggregate results land in `eval/SUMMARY.md`.
+- `npm test` covers the evidence ledger, the Qloo client (headers, caching, errors), taste-gap scoring, heatmap decoding and hotspot selection, and the streaming protocol. CI runs type-check, lint and tests on every push.
+
 ## Run it locally
 
 ```bash
