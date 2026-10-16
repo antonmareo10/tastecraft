@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { IconCheck, IconCopy } from "./icons";
+import { IconAlert, IconCheck, IconCopy } from "./icons";
+import type { Evidence } from "@/lib/types";
 
 export function Section({
   icon,
@@ -82,5 +83,28 @@ export function Pill({ children, tone = "plain" }: { children: ReactNode; tone?:
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${tones[tone]}`}>
       {children}
     </span>
+  );
+}
+
+export function EvidenceLine({ evidence }: { evidence: Evidence }) {
+  const ok = evidence.verified === true;
+  const unknown = evidence.verified === undefined;
+  return (
+    <li className="flex gap-2 text-[12px] leading-snug text-muted">
+      <span
+        className={`mt-0.5 shrink-0 ${ok ? "text-olive" : unknown ? "text-saffron" : "text-terracotta"}`}
+        title={
+          ok
+            ? `Verified: ${evidence.cites.map((c) => (c.score != null ? `${c.name} (${c.score})` : c.name)).join(", ")} returned by Qloo in this run`
+            : unknown
+              ? "Not checked"
+              : "Could not be matched to this run's Qloo responses"
+        }
+      >
+        {ok ? <IconCheck size={13} /> : <IconAlert size={13} />}
+        <span className="sr-only">{ok ? "Verified against Qloo" : "Not verified"}</span>
+      </span>
+      <span>{evidence.text}</span>
+    </li>
   );
 }

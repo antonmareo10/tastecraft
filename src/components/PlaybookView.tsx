@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import type { EntityRef, HeatCell, Playbook, Zone } from "@/lib/types";
 import {
   IconBasket,
+  IconCheck,
   IconDownload,
   IconGap,
   IconMap,
@@ -13,7 +14,7 @@ import {
   IconSpark,
   IconUsers,
 } from "./icons";
-import { AffinityBar, CopyButton, Pill, Section } from "./ui";
+import { AffinityBar, CopyButton, EvidenceLine, Pill, Section } from "./ui";
 import ShareAssets from "./ShareAssets";
 
 const TasteMap = dynamic(() => import("./TasteMap"), {
@@ -51,6 +52,7 @@ export type LiveState = {
   demographics?: { age: Record<string, number>; gender: Record<string, number> };
   compare?: { a: string; b: string; tags: { name: string; score?: number }[] };
   shows?: { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number }[];
+  draft?: Record<string, unknown>;
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
 };
 
@@ -102,6 +104,12 @@ export default function PlaybookView({
             )}
             {p?.headline ? (
               <p className="font-display mt-5 max-w-3xl text-xl leading-snug text-paper sm:text-2xl">“{p.headline}”</p>
+            ) : null}
+            {p?.verification && p.verification.checked > 0 ? (
+              <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-paper/25 px-3 py-1 text-xs text-paper/85">
+                <IconCheck size={13} />
+                {p.verification.verified} of {p.verification.checked} cited facts verified against this run’s live Qloo responses
+              </p>
             ) : running ? (
               <p className="mt-5 text-sm text-paper/70">Building the playbook from live taste data…</p>
             ) : null}
@@ -135,6 +143,8 @@ export default function PlaybookView({
           <p className="mt-3 text-[11px] text-muted">Affinity scores come straight from Qloo’s taste graph (0–100).</p>
         </Section>
       )}
+
+      {!p && live.draft && <DraftPreview draft={live.draft} />}
 
       {(live.demographics || Object.keys(live.tags).length > 0) && (
         <Section icon={<IconPlate size={16} />} kicker="Cravings & crowd" title="What they crave, and who they are">
@@ -236,11 +246,8 @@ export default function PlaybookView({
                   </p>
                   {m.evidence.length > 0 && (
                     <ul className="mt-3 space-y-1 border-t border-line pt-3">
-                      {m.evidence.map((ev) => (
-                        <li key={ev} className="flex gap-2 text-[12px] leading-snug text-muted">
-                          <IconSpark size={12} className="mt-0.5 shrink-0 text-saffron" />
-                          {ev}
-                        </li>
+                      {m.evidence.map((ev, i) => (
+                        <EvidenceLine key={`${m.dish}-${i}`} evidence={ev} />
                       ))}
                     </ul>
                   )}
@@ -340,6 +347,50 @@ export default function PlaybookView({
         </>
       )}
     </div>
+  );
+}
+
+function DraftPreview({ draft }: { draft: Record<string, unknown> }) {
+  const headline = typeof draft.headline === "string" ? draft.headline : "";
+  const moves = Array.isArray(draft.menu_moves) ? (draft.menu_moves as Array<Record<string, unknown>>) : [];
+  const gaps = Array.isArray(draft.taste_gaps) ? (draft.taste_gaps as Array<Record<string, unknown>>) : [];
+  const exp = (draft.experience ?? {}) as Record<string, unknown>;
+  const steps = [
+    { label: "Headline", done: headline.length > 0 },
+    { label: "Taste gaps", done: gaps.length > 0 },
+    { label: "Menu moves", done: moves.length >= 3 },
+    { label: "Event", done: typeof exp.event_idea === "string" },
+    { label: "Marketing", done: draft.marketing != null },
+    { label: "Shopping list", done: Array.isArray(draft.shopping_list) },
+    { label: "7-day plan", done: Array.isArray(draft.week_plan) },
+  ];
+  return (
+    <section aria-live="polite" className="rise rounded-2xl border border-dashed border-olive/40 bg-card p-5 sm:p-6">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-olive">Drafting live</p>
+      {headline ? (
+        <p className="font-display mt-2 text-xl leading-snug sm:text-2xl">{headline}</p>
+      ) : (
+        <p className="mt-2 text-sm text-muted">The agent is writing your playbook…</p>
+      )}
+      {moves.length > 0 && (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {moves.map((m, i) =>
+            typeof m.dish === "string" && m.dish ? (
+              <li key={i} className="rounded-full border border-line bg-paper px-3 py-1 text-sm">
+                {m.dish}
+              </li>
+            ) : null,
+          )}
+        </ul>
+      )}
+      <ol className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+        {steps.map((st) => (
+          <li key={st.label} className={st.done ? "text-olive" : "text-muted"}>
+            {st.done ? "✓" : "○"} {st.label}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -552,7 +603,7 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
           <ul className="mt-2 space-y-2 text-sm leading-relaxed">
             {p.menu_moves.map((m) => (
               <li key={m.dish}>
-                <span className="font-semibold">{m.dish}</span> — {m.evidence[0] ?? m.why}
+                <span className="font-semibold">{m.dish}</span> — {m.evidence[0]?.text ?? m.why}
               </li>
             ))}
             {p.taste_gaps[0] && (

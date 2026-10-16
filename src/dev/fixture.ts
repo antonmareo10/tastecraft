@@ -55,9 +55,9 @@ export const FIXTURE: AgentEvent[] = [
     audience_dna: { summary: "[DEV FIXTURE] Synthetic summary for layout review.", signals: [] },
     taste_gaps: [ { tag: "Vermouth bar", evidence: "Sample evidence", opportunity: "Sample opportunity text for layout." }, { tag: "Late-night menu", evidence: "Sample evidence", opportunity: "Sample opportunity text." } ],
     menu_moves: [
-      { dish: "Sample dish one", description: "Layout text.", price: 14, why: "Layout text.", evidence: ["Sample fact 1", "Sample fact 2"], ingredients: [] },
-      { dish: "Sample dish two", description: "Layout text.", price: 9.5, why: "Layout text.", evidence: ["Sample fact 1"], ingredients: [] },
-      { dish: "Sample dish three", description: "Layout text.", price: 12, why: "Layout text.", evidence: ["Sample fact 1"], ingredients: [] },
+      { dish: "Sample dish one", description: "Layout text.", price: 14, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Croquetas", score: 93 }], verified: true }, { text: "Sample fact 2", cites: [{ name: "Unknown", score: 50 }], verified: false }], ingredients: [] },
+      { dish: "Sample dish two", description: "Layout text.", price: 9.5, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [] },
+      { dish: "Sample dish three", description: "Layout text.", price: 12, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [] },
     ],
     experience: { event_idea: "Sample event title", event_why: "Layout text.", playlist: ["Sample Artist A", "Sample Artist B"], ambience: "Layout text." },
     marketing: { target_zones: [ { name: "Malasaña", reason: "Layout text." }, { name: "Lavapiés", reason: "Layout text." }, { name: "Chamberí", reason: "Layout text." } ], instagram_post: "Sample post text #madrid", collab_partners: [ { name: "Sample partner", why: "Layout text." } ] },
@@ -70,6 +70,7 @@ export const FIXTURE: AgentEvent[] = [
       { day: "Sun", action: "Review sales of each new dish", owner: "Owner" },
     ],
     caveats: ["[DEV FIXTURE] synthetic data"],
+    verification: { checked: 4, verified: 3, qloo_facts: 40 },
   } },
   { type: "tool_end", id: "t6", tool: "publish_playbook", summary: "Playbook ready" },
 ];

@@ -2,15 +2,15 @@
 
 import { useRef, useState } from "react";
 import { readNdjson } from "@/lib/ndjson";
-import type { AgentEvent, AgentRequest, EntityRef } from "@/lib/types";
+import type { AgentEvent, AgentRequest, EntityRef, Evidence } from "@/lib/types";
 import { IconArrow, IconCheck, IconSpark } from "./icons";
-import { Section } from "./ui";
+import { EvidenceLine, Section } from "./ui";
 
 type Thread = {
   question: string;
   steps: { id: string; label: string; done: boolean; summary?: string; error?: boolean }[];
   answer?: string;
-  evidence?: string[];
+  evidence?: Evidence[];
   error?: string;
   running: boolean;
 };
@@ -157,11 +157,8 @@ export default function FollowUp({
             {t.answer && <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed">{t.answer}</p>}
             {t.evidence && t.evidence.length > 0 && (
               <ul className="mt-3 space-y-1 border-t border-line pt-3">
-                {t.evidence.map((e) => (
-                  <li key={e} className="flex gap-2 text-[12px] leading-snug text-muted">
-                    <IconSpark size={12} className="mt-0.5 shrink-0 text-saffron" />
-                    {e}
-                  </li>
+                {t.evidence.map((e, j) => (
+                  <EvidenceLine key={j} evidence={e} />
                 ))}
               </ul>
             )}

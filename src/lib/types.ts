@@ -32,12 +32,18 @@ export type Ingredient = {
   supplier_category: string;
 };
 
+export type Evidence = {
+  text: string; // owner-friendly sentence
+  cites: { name: string; score?: number | null }[]; // exact Qloo names (and 0-100 scores) the sentence relies on
+  verified?: boolean; // set by the server after checking the cites against this run's Qloo responses
+};
+
 export type MenuMove = {
   dish: string;
   description: string;
   price: number;
   why: string;
-  evidence: string[];
+  evidence: Evidence[];
   ingredients: Ingredient[];
 };
 
@@ -71,6 +77,7 @@ export type Playbook = {
   shopping_list: (Ingredient & { est_cost: number })[];
   week_plan: { day: string; action: string; owner: string }[];
   caveats: string[];
+  verification?: { checked: number; verified: number; qloo_facts: number };
 };
 
 export type AgentEvent =
@@ -100,7 +107,8 @@ export type AgentEvent =
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
   | { type: "playbook"; playbook: Playbook }
-  | { type: "answer"; question: string; answer: string; evidence: string[] }
+  | { type: "playbook_draft"; draft: Record<string, unknown> }
+  | { type: "answer"; question: string; answer: string; evidence: Evidence[] }
   | { type: "error"; message: string }
   | { type: "done"; elapsed_ms: number };
 

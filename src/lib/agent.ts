@@ -4,6 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { EvidenceLedger } from "./ledger";
 import { QlooError } from "./qloo";
 import {
   DOMAINS,
@@ -41,6 +42,7 @@ If a tool returns an error or no data, do not retry it more than once; continue 
 
 Rules for the playbook:
 - Every menu move, event and marketing idea must be justified by concrete Qloo evidence: name the places, artists or brands and quote their affinity scores (as 0-100) exactly as the tools returned them. Never invent a score, a place or a statistic.
+- Each evidence item has a sentence plus "cites": the exact names (spelled exactly as the tools returned them) and the 0-100 scores you quoted. The server checks every cite against this run's Qloo responses and marks unverifiable facts, so only cite what the tools returned.
 - Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
@@ -51,6 +53,14 @@ Rules for the playbook:
 - Write in clear, warm, practical language for a busy owner, in the language the owner asked for (default English). Keep proper names as they are.
 
 Before each group of tool calls, write one short sentence (max 15 words) saying what you are checking and why. After publish_playbook, reply with a single short sentence.`;
+
+const EvidenceSchema = z.object({
+  text: z.string().describe("Owner-friendly sentence, e.g. 'Vermouth scores 95/100 with your crowd'"),
+  cites: z
+    .array(z.object({ name: z.string(), score: z.number().nullable() }))
+    .min(1)
+    .describe("Exact Qloo names (entity or tag, spelled exactly as the tool returned them) this sentence relies on, each with the 0-100 score you quoted, or null if none"),
+});
 
 const PlaybookSchema = z.object({
   restaurant: z.object({
@@ -75,7 +85,7 @@ const PlaybookSchema = z.object({
         description: z.string(),
         price: z.number(),
         why: z.string(),
-        evidence: z.array(z.string()).describe("2-3 concrete Qloo facts with scores"),
+        evidence: z.array(EvidenceSchema).describe("2-3 concrete Qloo facts"),
         ingredients: z.array(
           z.object({ item: z.string(), qty: z.number(), unit: z.string(), supplier_category: z.string() }),
         ),
@@ -121,7 +131,7 @@ type Emit = (e: AgentEvent) => void;
 
 const FOLLOWUP_SYSTEM = `You are Tastecraft, the taste-intelligence analyst for an independent restaurant. The owner already received a taste playbook and now asks a follow-up question.
 Use the Qloo tools to get fresh evidence for this specific question (for example, re-run audience_affinity or taste_tags with a demographic lens, or taste_map). Call independent tools in parallel and keep it to the few calls the question needs.
-Then call answer_owner exactly once with a direct, practical answer (max 160 words) and 2-4 concrete Qloo facts with scores exactly as the tools returned them. Never invent data. Answer in the language the owner asked for (default English).
+Then call answer_owner exactly once with a direct, practical answer (max 160 words) and 2-4 concrete Qloo facts; for each fact list in "cites" the exact names and 0-100 scores as the tools returned them (the server verifies them). Never invent data. Answer in the language the owner asked for (default English).
 Before each group of tool calls, write one short sentence (max 15 words) saying what you are checking.`;
 
 function lensFromGoal(req: AgentRequest): Lens | undefined {
@@ -141,6 +151,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     ? { entity_id: fu.restaurant.entity_id, name: fu.restaurant.name, tags: fu.restaurant.tags, all_tags: fu.restaurant.tags ?? [] }
     : null;
   let published = false;
+  const ledger = new EvidenceLedger();
 
   const findTool = betaZodTool({
     name: "find_restaurant",
@@ -152,6 +163,10 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       emit({ type: "tool_start", id, tool: "find_restaurant", label: `Locating ${name} in Qloo’s taste graph`, input: { name, city } });
       try {
         const matches = await findRestaurant(name, city);
+        for (const m of matches.slice(0, 3)) {
+          ledger.record(m.name, "search", m.popularity != null ? m.popularity * 100 : null);
+          m.all_tags.forEach((t) => ledger.record(t, "search"));
+        }
         if (matches[0]) {
           restaurant = matches[0];
           emit({ type: "restaurant", entity: matches[0] });
@@ -216,6 +231,11 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           take: input.take,
           lens,
         });
+        for (const r of results) {
+          ledger.record(r.name, "insights", r.affinity != null ? r.affinity * 100 : null);
+          if (r.popularity != null) ledger.record(r.name, "insights", r.popularity * 100);
+          r.tags?.forEach((t) => ledger.record(t, "insights"));
+        }
         emit({
           type: "tool_end",
           id,
@@ -260,6 +280,11 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       try {
         const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
         const { gaps, sampled } = await tasteGaps({ restaurant, city: input.city, lens });
+        for (const g of gaps) {
+          ledger.record(g.tag, "taste_gaps", g.share * 100);
+          g.examples.forEach((ex) => ledger.record(ex, "taste_gaps"));
+        }
+        for (const e of sampled) ledger.record(e.name, "taste_gaps", e.affinity != null ? e.affinity * 100 : null);
         emit({
           type: "tool_end",
           id,
@@ -298,6 +323,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       try {
         const { cells, top } = await tasteHeatmap({ entityId: restaurant.entity_id, city, lens: lensFromGoal(req) });
         const zones = await nameZones(top);
+        for (const z of zones) ledger.record(z.label, "heatmap", z.affinity * 100);
         if (cells.length) {
           const center: [number, number] =
             restaurant.lat != null && restaurant.lon != null
@@ -343,6 +369,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       try {
         const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
         const tags = await tasteTags({ entityId: restaurant.entity_id, city: input.city, family: input.family, lens });
+        for (const t of tags) ledger.record(t.name, "taste_analysis", t.affinity != null ? t.affinity * 100 : null);
         if (!lens && tags.length) emit({ type: "taste_tags", family: input.family, tags: tags.map((t) => ({ name: t.name, affinity: t.affinity })) });
         emit({
           type: "tool_end",
@@ -376,6 +403,8 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           emit({ type: "tool_end", id, tool: "audience_profile", summary: "No demographic data" });
           return "No demographic data available for this restaurant.";
         }
+        for (const [k, v] of Object.entries(d.age)) ledger.record(k, "demographics", v * 100);
+        for (const [k, v] of Object.entries(d.gender)) ledger.record(k, "demographics", v * 100);
         emit({ type: "demographics", age: d.age, gender: d.gender });
         const topAge = Object.entries(d.age).sort((a, b) => b[1] - a[1])[0];
         emit({ type: "tool_end", id, tool: "audience_profile", summary: topAge ? `Strongest age group: ${topAge[0].replaceAll("_", " ")}` : "Profile ready" });
@@ -401,6 +430,8 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       }
       try {
         const tags = await compareAudiences({ a: restaurant.entity_id, b: rival_entity_id, city });
+        ledger.record(rival_name, "compare");
+        for (const t of tags) ledger.record(t.name, "compare", t.score != null ? t.score * 100 : null);
         if (tags.length) emit({ type: "compare", a: restaurant.name, b: rival_name, tags: tags.slice(0, 10) });
         emit({
           type: "tool_end",
@@ -437,6 +468,11 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           return "Error: no location available.";
         }
         const shows = await nearbyShows({ artists, lat, lon });
+        for (const sh of shows) {
+          ledger.record(sh.artist, "ticketmaster");
+          ledger.record(sh.venue, "ticketmaster");
+          ledger.record(sh.event, "ticketmaster");
+        }
         if (shows.length) emit({ type: "shows", shows });
         emit({
           type: "tool_end",
@@ -452,7 +488,8 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     },
   });
 
-  const publishTool = betaZodTool({
+  const publishTool = {
+    ...betaZodTool({
     name: "publish_playbook",
     description: "Publish the final taste playbook to the restaurant owner. Call exactly once, at the end.",
     inputSchema: PlaybookSchema,
@@ -460,24 +497,37 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
       emit({ type: "tool_start", id, tool: "publish_playbook", label: "Writing your playbook", input: {} });
       published = true;
-      emit({ type: "playbook", playbook: playbook as Playbook });
+      const pb = playbook as Playbook;
+      let checked = 0;
+      let verified = 0;
+      pb.menu_moves = pb.menu_moves.map((m) => {
+        const v = ledger.verify(m.evidence);
+        checked += v.checked;
+        verified += v.verified;
+        return { ...m, evidence: v.items };
+      });
+      pb.verification = { checked, verified, qloo_facts: ledger.size };
+      emit({ type: "playbook", playbook: pb });
       emit({ type: "tool_end", id, tool: "publish_playbook", summary: "Playbook ready" });
       return "Published.";
     },
-  });
+    }),
+    // Stream the playbook as it is written so the UI can draft it live.
+    eager_input_streaming: true,
+  };
 
   const answerTool = betaZodTool({
     name: "answer_owner",
     description: "Deliver the answer to the owner's follow-up question. Call exactly once, at the end.",
     inputSchema: z.object({
       answer: z.string().describe("Direct, practical answer, max 160 words"),
-      evidence: z.array(z.string()).describe("2-4 concrete Qloo facts with scores"),
+      evidence: z.array(EvidenceSchema).describe("2-4 concrete Qloo facts"),
     }),
     run: async ({ answer, evidence }, ctx) => {
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
       emit({ type: "tool_start", id, tool: "answer_owner", label: "Answering your question", input: {} });
       published = true;
-      emit({ type: "answer", question: fu?.question ?? "", answer, evidence });
+      emit({ type: "answer", question: fu?.question ?? "", answer, evidence: ledger.verify(evidence).items });
       emit({ type: "tool_end", id, tool: "answer_owner", summary: "Answer ready" });
       return "Delivered.";
     },
@@ -510,6 +560,7 @@ Owner's question: ${fu.question}`
       thinking: { type: "adaptive", display: "updates" },
       betas: ["server-side-fallback-2026-07-01", "thinking-display-updates-2026-08-18"],
       fallbacks: "default",
+      stream: true,
       tools: fu
         ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, answerTool]
         : [
@@ -528,7 +579,27 @@ Owner's question: ${fu.question}`
     { signal },
   );
 
-  for await (const message of runner) {
+  let lastDraftAt = 0;
+  let draftId: string | null = null;
+  for await (const stream of runner) {
+    stream.on("streamEvent", (event, snapshot) => {
+      if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return;
+      const block = snapshot.content[event.index];
+      if (!block || block.type !== "tool_use" || block.name !== "publish_playbook") return;
+      if (!draftId) {
+        draftId = `draft-${block.id}`;
+        emit({ type: "tool_start", id: draftId, tool: "draft_playbook", label: "Drafting your playbook", input: {} });
+      }
+      const now = Date.now();
+      if (now - lastDraftAt < 700) return;
+      lastDraftAt = now;
+      emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
+    });
+    const message = await stream.finalMessage();
+    if (draftId) {
+      emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft complete" });
+      draftId = null;
+    }
     for (const block of message.content) {
       if (block.type === "text" && block.text.trim()) emit({ type: "note", text: block.text.trim() });
       if (block.type === "thinking" && block.thinking.trim()) emit({ type: "note", text: block.thinking.trim() });

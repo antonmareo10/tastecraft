@@ -322,6 +322,9 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
       case "playbook":
         live.playbook = ev.playbook;
         break;
+      case "playbook_draft":
+        live.draft = ev.draft;
+        break;
     }
   });
   return { items, live };
