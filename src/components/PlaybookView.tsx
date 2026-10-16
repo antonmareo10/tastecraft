@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { EntityRef, HeatCell, Playbook, Zone } from "@/lib/types";
+import type { EntityRef, HeatCell, Playbook, Resolution, Zone } from "@/lib/types";
 import {
   IconBasket,
   IconCheck,
@@ -46,6 +46,7 @@ function money(v: number, currency: string): string {
 
 export type LiveState = {
   restaurant?: EntityRef & { lat?: number; lon?: number };
+  resolution?: Resolution;
   dna: Record<string, EntityRef[]>;
   heatmap?: { cells: HeatCell[]; zones: Zone[]; center: [number, number] };
   baseline?: string;
@@ -57,14 +58,18 @@ export type LiveState = {
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
 };
 
+export type Alternative = Resolution["alternatives"][number];
+
 export default function PlaybookView({
   live,
   running,
   language,
+  onPickAlternative,
 }: {
   live: LiveState;
   running: boolean;
   language?: "English" | "Español";
+  onPickAlternative?: (alt: Alternative) => void;
 }) {
   const p = live.playbook;
   const liveShows = live.shows;
@@ -94,6 +99,7 @@ export default function PlaybookView({
             <p className="mt-1 text-sm text-paper/80">
               {p ? `${p.restaurant.concept} · ${p.restaurant.city}` : live.restaurant?.subtitle}
             </p>
+            {live.resolution && <MatchNote resolution={live.resolution} running={running} onPick={onPickAlternative} />}
             {live.restaurant?.tags && live.restaurant.tags.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-1.5">
                 {live.restaurant.tags.slice(0, 6).map((t) => (
@@ -165,7 +171,10 @@ export default function PlaybookView({
               </div>
             ))}
           </div>
-          <p className="mt-3 text-[11px] text-muted">Affinity scores come straight from Qloo’s taste graph (0–100).</p>
+          <p className="mt-3 text-[11px] leading-snug text-muted">
+            Scores (0–100) come straight from Qloo’s taste graph. They describe what people who like this restaurant tend to like, in
+            aggregate, not what any one guest will do.
+          </p>
         </Section>
       )}
 
@@ -240,7 +249,12 @@ export default function PlaybookView({
 
       {p && (
         <>
-          <ActHeader id="act-moves" n={2} title="The moves" subtitle="What to cook, what to host and who to tell — each backed by evidence." />
+          <ActHeader
+            id="act-moves"
+            n={2}
+            title="The moves"
+            subtitle="What to cook, what to host and who to tell. Facts marked ✓ come from Qloo in this run; the moves themselves are our read of them: bets to test, not predictions."
+          />
           {p.taste_gaps.length > 0 && (
             <Section icon={<IconGap size={16} />} kicker="Taste gaps" title="What locals love that you don’t serve yet">
               <ul className="grid gap-3 md:grid-cols-2">
@@ -267,11 +281,12 @@ export default function PlaybookView({
                   </div>
                   <p className="mt-1.5 text-sm leading-snug text-ink-2">{m.description}</p>
                   <p className="mt-3 text-[13px] leading-snug">
-                    <span className="font-semibold">Why: </span>
+                    <span className="font-semibold">Our read: </span>
                     {m.why}
                   </p>
                   {m.evidence.length > 0 && (
-                    <ul className="mt-3 space-y-1 border-t border-line pt-3">
+                    <ul className="mt-3 space-y-1 border-t border-line pt-3" aria-label="Qloo evidence">
+                      <li className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">Qloo evidence</li>
                       {m.evidence.map((ev, i) => (
                         <EvidenceLine key={`${m.dish}-${i}`} evidence={ev} />
                       ))}
@@ -373,6 +388,56 @@ export default function PlaybookView({
             </section>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+const MATCH_LABEL: Record<Resolution["match"], string> = {
+  owner_confirmed: "Confirmed by you",
+  exact: "Exact name match",
+  close: "Close name match",
+  best_guess: "Best guess",
+};
+
+// Shows which Qloo entity the analysis is about and lets the owner switch before relying on it.
+function MatchNote({
+  resolution,
+  running,
+  onPick,
+}: {
+  resolution: Resolution;
+  running: boolean;
+  onPick?: (alt: Alternative) => void;
+}) {
+  const unsure = resolution.status !== "resolved";
+  const alts = onPick && !running ? resolution.alternatives : [];
+  return (
+    <div className="no-print mt-3 text-xs text-paper/85">
+      <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className={`rounded-full px-2 py-0.5 ${unsure ? "bg-saffron/90 text-ink" : "border border-paper/30"}`}>
+          Qloo match: {MATCH_LABEL[resolution.match]}
+        </span>
+        {unsure && <span>Other places could fit this name. Check it is yours.</span>}
+      </p>
+      {alts.length > 0 && (
+        <details className="mt-2" open={unsure}>
+          <summary className="cursor-pointer select-none text-paper/80 underline underline-offset-2">Not your restaurant?</summary>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {alts.map((a) => (
+              <li key={a.entity_id}>
+                <button
+                  type="button"
+                  onClick={() => onPick?.(a)}
+                  className="rounded-full border border-paper/35 px-2.5 py-1 text-left text-paper transition hover:bg-paper/10"
+                >
+                  {a.name}
+                  {a.subtitle && <span className="text-paper/65"> · {a.subtitle}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { runTastecraft } from "@/lib/agent";
 import { acquireLiveRun } from "@/lib/limits";
 import { qlooConfigured } from "@/lib/qloo";
-import { audienceAffinity, audienceDemographics, findRestaurant, tasteTags } from "@/lib/qloo-tasks";
+import { audienceAffinity, audienceDemographics, findRestaurant, resolveRestaurant, tasteTags } from "@/lib/qloo-tasks";
 import type { AgentEvent, Playbook } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -20,12 +20,16 @@ const handler = createMcpHandler(
       {
         title: "Restaurant taste profile",
         description:
-          "Fast, no-LLM taste profile of a restaurant's audience from Qloo: the restaurant entity, local places, artists and brands its guests love (with 0-100 affinity), dishes/cuisines/vibes they over-index on, and their age/gender skew.",
-        inputSchema: z.object({ restaurant: z.string().min(2).max(80), city: z.string().min(2).max(60) }),
+          "Fast, no-LLM taste profile of a restaurant's audience from Qloo: the restaurant entity (with how sure the match is and alternatives), local places, artists and brands its guests love (with 0-100 affinity), dishes/cuisines/vibes they over-index on, and their age/gender skew. Scores are aggregate tendencies, not predictions about individual guests. If the match is ambiguous, show the alternatives to the user and call again with entity_id.",
+        inputSchema: z.object({
+          restaurant: z.string().min(2).max(80),
+          city: z.string().min(2).max(60),
+          entity_id: z.string().max(64).optional(),
+        }),
       },
-      async ({ restaurant, city }) => {
+      async ({ restaurant, city, entity_id }) => {
         if (!qlooConfigured()) return fail("Qloo is not configured on this server.");
-        const [match] = await findRestaurant(restaurant, city);
+        const { selected: match, resolution } = resolveRestaurant(restaurant, city, await findRestaurant(restaurant, city), entity_id);
         if (!match) return fail(`No Qloo match for ${restaurant} in ${city}.`);
         const ids = [match.entity_id];
         const [places, artists, brands, dishes, cuisines, vibe, demographics] = await Promise.all([
@@ -39,7 +43,8 @@ const handler = createMcpHandler(
         ]);
         const pct = (a?: number) => (a == null ? null : Math.round(a * 100));
         return text({
-          restaurant: { name: match.name, address: match.subtitle, tags: match.all_tags.slice(0, 12) },
+          restaurant: { entity_id: match.entity_id, name: match.name, address: match.subtitle, tags: match.all_tags.slice(0, 12) },
+          match: { status: resolution.status, how: resolution.match, alternatives: resolution.alternatives },
           guests_also_love: {
             places: places.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
             artists: artists.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
@@ -65,18 +70,19 @@ const handler = createMcpHandler(
         inputSchema: z.object({
           restaurant: z.string().min(2).max(80),
           city: z.string().min(2).max(60),
+          entity_id: z.string().max(64).optional(),
           goal: z.string().max(120).optional(),
           language: z.enum(["English", "Español"]).optional(),
         }),
       },
-      async ({ restaurant, city, goal, language }) => {
+      async ({ restaurant, city, entity_id, goal, language }) => {
         if (!qlooConfigured()) return fail("Qloo is not configured on this server.");
         const gate = acquireLiveRun("mcp");
         if (!gate.ok) return fail(gate.reason);
         let playbook: Playbook | null = null;
         let error: string | null = null;
         try {
-          await runTastecraft({ restaurant, city, goal, language }, (e: AgentEvent) => {
+          await runTastecraft({ restaurant, city, entity_id, goal, language }, (e: AgentEvent) => {
             if (e.type === "playbook") playbook = e.playbook;
             if (e.type === "error") error = e.message;
           });

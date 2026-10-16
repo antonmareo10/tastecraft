@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   const req: AgentRequest = {
     restaurant: clean(body.restaurant),
     city: clean(body.city, 60),
+    entity_id: /^[A-Za-z0-9-]{6,64}$/.test(String(body.entity_id ?? "")) ? String(body.entity_id) : undefined,
     goal: clean(body.goal, 120) || undefined,
     lens: body.lens
       ? { age: clean(body.lens.age, 20) || undefined, gender: clean(body.lens.gender, 10) || undefined }
