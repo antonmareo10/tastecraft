@@ -25,6 +25,7 @@ The app shows a **side-by-side of the same model with and without Qloo**, so the
 
 ## What the owner gets
 
+- **A Taste-Fit score (0–100)** — one headline number for how well the plan fits this crowd, the mean Qloo affinity of the *verified* facts it's built on (and a per-dish score). Computed from Qloo's own numbers, never written by the model.
 - **Audience taste DNA** — places, artists, brands and titles their guests love, with Qloo affinity scores.
 - **Cravings & crowd** — dishes, cuisines and vibes the audience over-indexes on, plus an age/gender profile.
 - **Taste map** — a heatmap of where people with this taste live and go out, with named neighborhoods to target.
