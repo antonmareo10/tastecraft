@@ -290,7 +290,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           lens,
         });
         for (const r of results) {
-          ledger.record(r.name, "insights", r.affinity != null ? r.affinity * 100 : null);
+          ledger.record(r.name, "insights", r.affinity != null ? r.affinity * 100 : null, { affinity: true });
           if (r.popularity != null) ledger.record(r.name, "insights", r.popularity * 100);
           r.tags?.forEach((t) => ledger.record(t, "insights"));
         }
@@ -342,7 +342,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           ledger.record(g.tag, "taste_gaps", g.share * 100);
           g.examples.forEach((ex) => ledger.record(ex, "taste_gaps"));
         }
-        for (const e of sampled) ledger.record(e.name, "taste_gaps", e.affinity != null ? e.affinity * 100 : null);
+        for (const e of sampled) ledger.record(e.name, "taste_gaps", e.affinity != null ? e.affinity * 100 : null, { affinity: true });
         emit({
           type: "tool_end",
           id,
@@ -381,7 +381,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       try {
         const { cells, top } = await tasteHeatmap({ entityId: restaurant.entity_id, city, lens: lensFromGoal(req) });
         const zones = await nameZones(top);
-        for (const z of zones) ledger.record(z.label, "heatmap", z.affinity * 100);
+        for (const z of zones) ledger.record(z.label, "heatmap", z.affinity * 100, { affinity: true });
         if (cells.length) {
           const center: [number, number] =
             restaurant.lat != null && restaurant.lon != null
@@ -427,7 +427,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       try {
         const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
         const tags = await tasteTags({ entityId: restaurant.entity_id, city: input.city, family: input.family, lens });
-        for (const t of tags) ledger.record(t.name, "taste_analysis", t.affinity != null ? t.affinity * 100 : null);
+        for (const t of tags) ledger.record(t.name, "taste_analysis", t.affinity != null ? t.affinity * 100 : null, { affinity: true });
         if (!lens && tags.length) emit({ type: "taste_tags", family: input.family, tags: tags.map((t) => ({ name: t.name, affinity: t.affinity })) });
         emit({
           type: "tool_end",
@@ -600,14 +600,14 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         const games = include_sports ? await nearbyGames({ lat, lon }) : [];
         const shows = [...match.shows, ...games];
         for (const sh of shows) {
-          ledger.record(sh.artist, "ticketmaster", sh.fan_match ?? null);
+          ledger.record(sh.artist, "ticketmaster", sh.fan_match ?? null, { affinity: true });
           ledger.record(sh.venue, "ticketmaster");
           ledger.record(sh.event, "ticketmaster");
         }
         for (const sc of match.scores) {
           if (sc.fanMatch == null) continue;
-          ledger.record(sc.input, "qloo_rank", sc.fanMatch);
-          ledger.record(sc.name, "qloo_rank", sc.fanMatch);
+          ledger.record(sc.input, "qloo_rank", sc.fanMatch, { affinity: true });
+          ledger.record(sc.name, "qloo_rank", sc.fanMatch, { affinity: true });
         }
         if (shows.length) emit({ type: "shows", shows });
         const top = match.shows[0];

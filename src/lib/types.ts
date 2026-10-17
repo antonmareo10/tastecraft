@@ -45,6 +45,10 @@ export type MenuMove = {
   why: string;
   evidence: Evidence[];
   ingredients: Ingredient[];
+  // Per-dish Taste-Fit (0-100): mean Qloo affinity of this dish's verified cited facts.
+  // Computed server-side from Qloo's own numbers (same source as the headline taste_fit),
+  // never asked of the model. null when the dish has no verified affinity to stand on.
+  fit?: number | null;
 };
 
 export type Playbook = {

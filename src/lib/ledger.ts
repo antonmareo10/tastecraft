@@ -13,14 +13,29 @@ export function normalizeName(s: string): string {
 }
 
 export class EvidenceLedger {
-  private facts = new Map<string, { display: string; scores: Set<number>; sources: Set<string> }>();
+  private facts = new Map<
+    string,
+    { display: string; scores: Set<number>; affinities: Set<number>; sources: Set<string> }
+  >();
 
-  record(name: string | undefined | null, source: string, score?: number | null) {
+  /**
+   * Record a name Qloo returned. `scores` keeps every number seen for the name and backs
+   * cite verification. `opts.affinity` marks the number as a genuine audience-affinity
+   * score (0-100) — only those feed the Taste-Fit. Popularity, trend change, demographic
+   * over/under-index, gap-share and comparison deltas are recorded for verification but
+   * must NOT be mistaken for affinity.
+   */
+  record(name: string | undefined | null, source: string, score?: number | null, opts?: { affinity?: boolean }) {
     if (!name) return;
     const key = normalizeName(name);
     if (!key) return;
-    const entry = this.facts.get(key) ?? { display: name, scores: new Set<number>(), sources: new Set<string>() };
-    if (typeof score === "number" && Number.isFinite(score)) entry.scores.add(Math.round(score));
+    const entry =
+      this.facts.get(key) ?? { display: name, scores: new Set<number>(), affinities: new Set<number>(), sources: new Set<string>() };
+    if (typeof score === "number" && Number.isFinite(score)) {
+      const rounded = Math.round(score);
+      entry.scores.add(rounded);
+      if (opts?.affinity) entry.affinities.add(rounded);
+    }
     entry.sources.add(source);
     this.facts.set(key, entry);
   }
@@ -46,12 +61,16 @@ export class EvidenceLedger {
     return { items, checked, verified };
   }
 
-  /** The strongest affinity (0-100) Qloo returned for this fact in this run, or null if none was numeric. */
+  /**
+   * The strongest audience affinity (0-100) Qloo returned for this fact in this run, or null
+   * if Qloo gave no affinity for it. Only affinity-tagged numbers count: a name's popularity,
+   * trend or demographic numbers never stand in for its affinity. Clamped to [0, 100].
+   */
   affinityOf(name: string | undefined | null): number | null {
     if (!name) return null;
     const entry = this.facts.get(normalizeName(name));
-    if (!entry || entry.scores.size === 0) return null;
-    return Math.max(...entry.scores);
+    if (!entry || entry.affinities.size === 0) return null;
+    return Math.max(0, Math.min(100, Math.max(...entry.affinities)));
   }
 
   get size(): number {
@@ -70,18 +89,24 @@ export function tasteFit(moves: MenuMove[], ledger: EvidenceLedger): Playbook["t
   const affinities: number[] = [];
   let grounded = 0;
   for (const m of moves) {
-    let moveHasAffinity = false;
+    const moveAffinities: number[] = [];
     for (const e of m.evidence) {
       if (!e.verified) continue;
       for (const c of e.cites) {
         const a = ledger.affinityOf(c.name);
-        if (a != null) {
-          affinities.push(a);
-          moveHasAffinity = true;
-        }
+        if (a != null) moveAffinities.push(a);
       }
     }
-    if (moveHasAffinity) grounded += 1;
+    // Attach each dish's own fit from the SAME affinity numbers, so the per-dish badge and the
+    // headline are one computation — the UI renders this rather than re-deriving from the model's
+    // quoted scores (which could drift from, or inflate past, what Qloo actually said).
+    if (moveAffinities.length > 0) {
+      grounded += 1;
+      m.fit = Math.round(moveAffinities.reduce((sum, a) => sum + a, 0) / moveAffinities.length);
+      for (const a of moveAffinities) affinities.push(a);
+    } else {
+      m.fit = null;
+    }
   }
   if (affinities.length === 0) return undefined;
   const score = Math.round(affinities.reduce((sum, a) => sum + a, 0) / affinities.length);

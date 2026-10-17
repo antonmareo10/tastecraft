@@ -83,9 +83,9 @@ export const FIXTURE: AgentEvent[] = [
     audience_dna: { summary: "[DEV FIXTURE] Synthetic summary for layout review.", signals: [] },
     taste_gaps: [ { tag: "Vermouth bar", evidence: "Sample evidence", opportunity: "Sample opportunity text for layout." }, { tag: "Late-night menu", evidence: "Sample evidence", opportunity: "Sample opportunity text." } ],
     menu_moves: [
-      { dish: "Sample dish one", description: "Layout text.", price: 14, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Croquetas", score: 93 }], verified: true }, { text: "Sample fact 2", cites: [{ name: "Unknown", score: 50 }], verified: false }], ingredients: [] },
-      { dish: "Sample dish two", description: "Layout text.", price: 9.5, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [] },
-      { dish: "Sample dish three", description: "Layout text.", price: 12, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [] },
+      { dish: "Sample dish one", description: "Layout text.", price: 14, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Croquetas", score: 93 }], verified: true }, { text: "Sample fact 2", cites: [{ name: "Unknown", score: 50 }], verified: false }], ingredients: [], fit: 93 },
+      { dish: "Sample dish two", description: "Layout text.", price: 9.5, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [], fit: 86 },
+      { dish: "Sample dish three", description: "Layout text.", price: 12, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [], fit: 86 },
     ],
     experience: {
       event_idea: "Sample event title",

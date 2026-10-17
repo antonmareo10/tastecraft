@@ -45,18 +45,6 @@ function money(v: number, currency: string): string {
   }
 }
 
-// How well one dish fits the crowd: mean Qloo affinity (0-100) of its verified cited facts.
-// Uses only verified cites, whose quoted scores match Qloo's own within ±1.
-function moveFit(m: Playbook["menu_moves"][number]): number | null {
-  const scores: number[] = [];
-  for (const e of m.evidence) {
-    if (!e.verified) continue;
-    for (const c of e.cites) if (typeof c.score === "number") scores.push(c.score);
-  }
-  if (scores.length === 0) return null;
-  return Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length);
-}
-
 export type LiveState = {
   restaurant?: EntityRef & { lat?: number; lon?: number };
   resolution?: Resolution;
@@ -305,7 +293,7 @@ export default function PlaybookView({
           <Section icon={<IconPlate size={16} />} kicker="Menu moves" title="Three dishes to test next week">
             <div className="grid gap-4 lg:grid-cols-3">
               {p.menu_moves.map((m) => {
-                const fit = moveFit(m);
+                const fit = m.fit;
                 return (
                 <article key={m.dish} className="flex flex-col rounded-xl border border-line bg-paper/40 p-4">
                   <div className="flex items-baseline justify-between gap-3">
