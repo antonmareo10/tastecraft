@@ -862,10 +862,16 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-line bg-paper/40 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model, no Qloo</p>
+          <p className="mt-1 text-[11px] text-muted">Taste-Fit: n/a — no verified Qloo facts to stand on</p>
           <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-2">{baseline}</p>
         </div>
         <div className="rounded-xl border border-olive/30 bg-olive/5 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">Tastecraft, grounded in Qloo</p>
+          {p.taste_fit && (
+            <p className="mt-1 text-[11px] font-semibold text-olive">
+              Taste-Fit: {p.taste_fit.score}/100 — {p.taste_fit.facts} verified Qloo facts
+            </p>
+          )}
           <ul className="mt-2 space-y-2 text-sm leading-relaxed">
             {p.menu_moves.map((m) => (
               <li key={m.dish}>
