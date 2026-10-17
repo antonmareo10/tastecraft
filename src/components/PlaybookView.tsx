@@ -44,6 +44,18 @@ function money(v: number, currency: string): string {
   }
 }
 
+// How well one dish fits the crowd: mean Qloo affinity (0-100) of its verified cited facts.
+// Uses only verified cites, whose quoted scores match Qloo's own within ±1.
+function moveFit(m: Playbook["menu_moves"][number]): number | null {
+  const scores: number[] = [];
+  for (const e of m.evidence) {
+    if (!e.verified) continue;
+    for (const c of e.cites) if (typeof c.score === "number") scores.push(c.score);
+  }
+  if (scores.length === 0) return null;
+  return Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length);
+}
+
 export type LiveState = {
   restaurant?: EntityRef & { lat?: number; lon?: number };
   resolution?: Resolution;
@@ -288,10 +300,22 @@ export default function PlaybookView({
 
           <Section icon={<IconPlate size={16} />} kicker="Menu moves" title="Three dishes to test next week">
             <div className="grid gap-4 lg:grid-cols-3">
-              {p.menu_moves.map((m) => (
+              {p.menu_moves.map((m) => {
+                const fit = moveFit(m);
+                return (
                 <article key={m.dish} className="flex flex-col rounded-xl border border-line bg-paper/40 p-4">
                   <div className="flex items-baseline justify-between gap-3">
-                    <h4 className="font-display text-lg leading-tight">{m.dish}</h4>
+                    <div className="flex items-baseline gap-2">
+                      <h4 className="font-display text-lg leading-tight">{m.dish}</h4>
+                      {fit != null && (
+                        <span
+                          className="shrink-0 rounded-full bg-olive/10 px-1.5 py-0.5 text-[10px] font-semibold text-olive"
+                          title="Taste-Fit for this dish: mean Qloo affinity (0-100) of its verified facts."
+                        >
+                          Fit {fit}
+                        </span>
+                      )}
+                    </div>
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-olive">
                       {money(m.price, p.currency)}
                     </span>
@@ -310,7 +334,8 @@ export default function PlaybookView({
                     </ul>
                   )}
                 </article>
-              ))}
+                );
+              })}
             </div>
           </Section>
 
