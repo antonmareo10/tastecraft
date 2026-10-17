@@ -1,7 +1,7 @@
 // Evidence ledger: every fact Qloo returned during a run, so the server can verify each
 // claim in the playbook against what the API actually said (not what the model remembers).
 
-import type { Evidence } from "./types";
+import type { Evidence, MenuMove, Playbook } from "./types";
 
 export function normalizeName(s: string): string {
   return s
@@ -46,7 +46,44 @@ export class EvidenceLedger {
     return { items, checked, verified };
   }
 
+  /** The strongest affinity (0-100) Qloo returned for this fact in this run, or null if none was numeric. */
+  affinityOf(name: string | undefined | null): number | null {
+    if (!name) return null;
+    const entry = this.facts.get(normalizeName(name));
+    if (!entry || entry.scores.size === 0) return null;
+    return Math.max(...entry.scores);
+  }
+
   get size(): number {
     return this.facts.size;
   }
+}
+
+/**
+ * Taste-Fit Score: a single 0-100 number for how strongly the plan's dishes lean on things
+ * this restaurant's audience actually over-indexes on. It is the mean Qloo affinity of the
+ * *verified* facts the menu moves cite — computed from Qloo's own numbers, never asked of the
+ * model. A high score means the plan is built on strong, checked audience signals; it says
+ * nothing about how many covers a dish will sell (that is what the one-week test is for).
+ */
+export function tasteFit(moves: MenuMove[], ledger: EvidenceLedger): Playbook["taste_fit"] | undefined {
+  const affinities: number[] = [];
+  let grounded = 0;
+  for (const m of moves) {
+    let moveHasAffinity = false;
+    for (const e of m.evidence) {
+      if (!e.verified) continue;
+      for (const c of e.cites) {
+        const a = ledger.affinityOf(c.name);
+        if (a != null) {
+          affinities.push(a);
+          moveHasAffinity = true;
+        }
+      }
+    }
+    if (moveHasAffinity) grounded += 1;
+  }
+  if (affinities.length === 0) return undefined;
+  const score = Math.round(affinities.reduce((sum, a) => sum + a, 0) / affinities.length);
+  return { score, facts: affinities.length, moves_grounded: grounded, moves_total: moves.length };
 }

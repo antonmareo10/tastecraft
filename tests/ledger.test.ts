@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EvidenceLedger, normalizeName } from "@/lib/ledger";
+import { EvidenceLedger, normalizeName, tasteFit } from "@/lib/ledger";
+import type { MenuMove } from "@/lib/types";
 
 describe("normalizeName", () => {
   it("ignores case, accents and punctuation", () => {
@@ -38,5 +39,53 @@ describe("EvidenceLedger", () => {
     ]);
     expect(res.items.map((i) => i.verified)).toEqual([true, false, false]);
     expect(res).toMatchObject({ checked: 3, verified: 1 });
+  });
+
+  it("returns the strongest recorded affinity, or null", () => {
+    const l = new EvidenceLedger();
+    l.record("Vermouth", "taste_analysis", 95.4);
+    l.record("Vermouth", "insights", 90); // keep the strongest
+    l.record("Malasaña", "heatmap"); // no numeric score
+    expect(l.affinityOf("vermouth")).toBe(95);
+    expect(l.affinityOf("Malasana")).toBeNull();
+    expect(l.affinityOf("Unknown")).toBeNull();
+  });
+});
+
+describe("tasteFit", () => {
+  const l = new EvidenceLedger();
+  l.record("Vermouth", "taste_analysis", 90);
+  l.record("Natural wine", "taste_analysis", 80);
+  l.record("Croquetas", "taste_analysis", 70);
+
+  const move = (dish: string, evidence: MenuMove["evidence"]): MenuMove => ({
+    dish,
+    description: "",
+    price: 10,
+    why: "",
+    ingredients: [],
+    evidence,
+  });
+
+  it("averages the Qloo affinity of verified cited facts only", () => {
+    const moves = [
+      move("A", [
+        { text: "", cites: [{ name: "Vermouth", score: 90 }], verified: true },
+        { text: "", cites: [{ name: "Natural wine", score: 80 }], verified: true },
+      ]),
+      move("B", [
+        { text: "", cites: [{ name: "Croquetas", score: 70 }], verified: true },
+        { text: "", cites: [{ name: "Not checked", score: 50 }], verified: false }, // ignored
+      ]),
+    ];
+    // (90 + 80 + 70) / 3 = 80
+    expect(tasteFit(moves, l)).toEqual({ score: 80, facts: 3, moves_grounded: 2, moves_total: 2 });
+  });
+
+  it("returns undefined when no verified cite has a numeric affinity", () => {
+    const l2 = new EvidenceLedger();
+    l2.record("Malasaña", "heatmap"); // no numeric score
+    const moves = [move("C", [{ text: "", cites: [{ name: "Malasaña" }], verified: true }])];
+    expect(tasteFit(moves, l2)).toBeUndefined();
   });
 });

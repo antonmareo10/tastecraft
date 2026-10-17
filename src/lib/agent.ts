@@ -4,7 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { EvidenceLedger } from "./ledger";
+import { EvidenceLedger, tasteFit } from "./ledger";
 import { QlooError } from "./qloo";
 import {
   DOMAINS,
@@ -547,6 +547,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         return { ...m, evidence: v.items };
       });
       pb.verification = { checked, verified, qloo_facts: ledger.size };
+      pb.taste_fit = tasteFit(pb.menu_moves, ledger);
       emit({ type: "playbook", playbook: pb });
       emit({ type: "tool_end", id, tool: "publish_playbook", summary: "Playbook ready" });
       return "Published.";

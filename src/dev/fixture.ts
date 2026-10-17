@@ -71,6 +71,7 @@ export const FIXTURE: AgentEvent[] = [
     ],
     caveats: ["[DEV FIXTURE] synthetic data"],
     verification: { checked: 4, verified: 3, qloo_facts: 40 },
+    taste_fit: { score: 88, facts: 3, moves_grounded: 3, moves_total: 3 },
   } },
   { type: "tool_end", id: "t6", tool: "publish_playbook", summary: "Playbook ready" },
 ];

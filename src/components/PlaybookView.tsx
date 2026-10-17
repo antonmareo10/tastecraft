@@ -112,6 +112,23 @@ export default function PlaybookView({
             {p?.headline ? (
               <p className="font-display mt-5 max-w-3xl text-xl leading-snug text-paper sm:text-2xl">“{p.headline}”</p>
             ) : null}
+            {p?.taste_fit ? (
+              <div
+                className="mt-5 inline-flex items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5"
+                title="Mean Qloo affinity of the verified facts the menu moves are built on. Computed from Qloo's numbers, not written by the model. It measures how well the plan fits this crowd's tastes, not how many covers a dish will sell."
+              >
+                <div className="flex items-baseline gap-0.5">
+                  <span className="font-display text-4xl leading-none text-paper">{p.taste_fit.score}</span>
+                  <span className="text-sm text-paper/70">/100</span>
+                </div>
+                <div className="leading-tight">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Taste-Fit</p>
+                  <p className="text-[11px] text-paper/70">
+                    {p.taste_fit.facts} verified Qloo facts behind {p.taste_fit.moves_grounded} of {p.taste_fit.moves_total} menu moves
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {p?.verification && p.verification.checked > 0 ? (
               <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-paper/25 px-3 py-1 text-xs text-paper/85">
                 <IconCheck size={13} />

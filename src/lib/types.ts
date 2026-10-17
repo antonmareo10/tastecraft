@@ -78,6 +78,9 @@ export type Playbook = {
   week_plan: { day: string; action: string; owner: string }[];
   caveats: string[];
   verification?: { checked: number; verified: number; qloo_facts: number };
+  // How strongly the plan leans on things this audience over-indexes on (mean Qloo affinity of
+  // the verified facts the menu moves cite), 0-100. Computed server-side, never asked of the model.
+  taste_fit?: { score: number; facts: number; moves_grounded: number; moves_total: number };
 };
 
 export type AgentEvent =
