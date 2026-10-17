@@ -3,7 +3,7 @@
 
 import ngeohash from "ngeohash";
 import { entitiesFrom, qlooGet, tagName, toEntityRef, type RawEntity, type RawTag } from "./qloo";
-import type { EntityRef, HeatCell, Zone, Resolution } from "./types";
+import type { EntityRef, HeatCell, Zone, Resolution, ShowRef } from "./types";
 
 export const DOMAINS = ["place", "brand", "artist", "movie", "tv_show", "book", "podcast", "destination"] as const;
 export type Domain = (typeof DOMAINS)[number];
@@ -364,10 +364,12 @@ export async function nameZones(cells: HeatCell[]): Promise<Zone[]> {
 }
 
 // --- 5. Live music nearby (Ticketmaster Discovery API, optional) ---------------
-// If TICKETMASTER_API_KEY is set, find upcoming concerts near the restaurant by artists
-// the audience loves, so the owner can plan pre-/post-show menus.
+// If TICKETMASTER_API_KEY is set, list upcoming concerts near the restaurant so the owner can plan
+// pre-/post-show menus. src/lib/concerts.ts ranks the billed artists for the audience with Qloo.
 
-export type Show = { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number; kind?: "music" | "sports" };
+export type Show = ShowRef & { kind?: "music" | "sports" };
+/** A listed concert with every billed artist (headliner first). */
+export type MusicListing = Show & { attractions: string[] };
 
 export function showsConfigured(): boolean {
   return Boolean(process.env.TICKETMASTER_API_KEY);
@@ -425,7 +427,83 @@ export async function nearbyShows(opts: { artists: string[]; lat: number; lon: n
   return dedupe(shows).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
 }
 
-function dedupe(shows: Show[]): Show[] {
+// Every upcoming music event near the restaurant in the next `days` (one Ticketmaster call, no artist filter).
+// Returns null when the listing could not be fetched, so callers can fall back to an artist search.
+export async function upcomingMusicEvents(opts: {
+  lat: number;
+  lon: number;
+  radiusKm?: number;
+  days?: number;
+  size?: number;
+}): Promise<MusicListing[] | null> {
+  const key = process.env.TICKETMASTER_API_KEY;
+  if (!key) return [];
+  const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
+  const start = new Date();
+  const end = new Date(start.getTime() + (opts.days ?? 35) * 24 * 3600 * 1000);
+  url.searchParams.set("apikey", key);
+  url.searchParams.set("classificationName", "music");
+  url.searchParams.set("latlong", `${opts.lat},${opts.lon}`);
+  url.searchParams.set("radius", String(opts.radiusKm ?? 25));
+  url.searchParams.set("unit", "km");
+  url.searchParams.set("startDateTime", start.toISOString().slice(0, 19) + "Z");
+  url.searchParams.set("endDateTime", end.toISOString().slice(0, 19) + "Z");
+  url.searchParams.set("sort", "date,asc");
+  url.searchParams.set("size", String(Math.min(50, opts.size ?? 50)));
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { _embedded?: { events?: TmEvent[] } };
+    const listings: MusicListing[] = [];
+    for (const e of j._embedded?.events ?? []) {
+      if (NOT_A_SHOW.test(e.name ?? "")) continue;
+      const attractions: string[] = [];
+      for (const a of e._embedded?.attractions ?? []) {
+        const n = (a.name ?? "").trim();
+        if (n && !NOT_A_SHOW.test(n) && !attractions.some((x) => norm(x) === norm(n))) attractions.push(n);
+      }
+      if (!attractions.length) continue; // only billed artists
+      listings.push({
+        artist: attractions[0],
+        attractions,
+        event: e.name ?? attractions[0],
+        venue: e._embedded?.venues?.[0]?.name ?? "",
+        date: e.dates?.start?.localDate ?? "",
+        url: e.url,
+        distance_km: typeof e.distance === "number" ? Number(e.distance.toFixed(1)) : undefined,
+        kind: "music",
+      });
+    }
+    return dedupe(listings);
+  } catch {
+    return null;
+  }
+}
+
+/** Distinct billed artists, nearest events first (then earliest), at most `max`. */
+export function billedArtists(listings: MusicListing[], max = 10): string[] {
+  const ordered = [...listings].sort(
+    (a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity) || a.date.localeCompare(b.date),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const l of ordered) {
+    for (const name of l.attractions) {
+      const k = norm(name);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(name);
+      if (out.length === max) return out;
+    }
+  }
+  return out;
+}
+
+export function normalizeArtist(name: string): string {
+  return norm(name);
+}
+
+function dedupe<T extends Show>(shows: T[]): T[] {
   const seen = new Set<string>();
   return shows.filter((s) => {
     const k = `${norm(s.event)}|${s.date}`;

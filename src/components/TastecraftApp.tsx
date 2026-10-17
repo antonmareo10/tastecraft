@@ -359,6 +359,13 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
       case "shows":
         live.shows = ev.shows;
         break;
+      case "trends": {
+        // A later rising_nearby call (e.g. for the rival) adds to the list; the newest series per place wins.
+        const byId = new Map((live.trends ?? []).map((t) => [t.entity_id, t]));
+        for (const t of ev.series) byId.set(t.entity_id, t);
+        live.trends = [...byId.values()];
+        break;
+      }
       case "playbook":
         live.playbook = ev.playbook;
         break;

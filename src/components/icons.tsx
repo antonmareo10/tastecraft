@@ -100,3 +100,9 @@ export const IconArrow = (p: IconProps) => (
     <path d="M5 12h14M13 6l6 6-6 6" />
   </svg>
 );
+export const IconTrend = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m3 17 6-6 4 4 8-8" />
+    <path d="M15 7h6v6" />
+  </svg>
+);

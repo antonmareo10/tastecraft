@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { EntityRef, HeatCell, Playbook, Resolution, Zone } from "@/lib/types";
+import type { EntityRef, HeatCell, Playbook, Resolution, ShowRef, TrendLine, Zone } from "@/lib/types";
 import {
   IconBasket,
   IconCheck,
@@ -12,6 +12,7 @@ import {
   IconMusic,
   IconPlate,
   IconSpark,
+  IconTrend,
   IconUsers,
 } from "./icons";
 import { AffinityBar, CopyButton, EvidenceLine, Pill, Section } from "./ui";
@@ -65,7 +66,8 @@ export type LiveState = {
   playbook?: Playbook;
   demographics?: { age: Record<string, number>; gender: Record<string, number> };
   compare?: { a: string; b: string; tags: { name: string; score?: number }[] };
-  shows?: { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number }[];
+  shows?: ShowRef[];
+  trends?: TrendLine[];
   draft?: Record<string, unknown>;
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
 };
@@ -206,6 +208,8 @@ export default function PlaybookView({
           </p>
         </Section>
       )}
+
+      {live.trends && live.trends.length > 0 && <RisingAroundYou series={live.trends} restaurantId={live.restaurant?.entity_id} />}
 
       {!p && live.draft && <DraftPreview draft={live.draft} />}
 
@@ -354,10 +358,13 @@ export default function PlaybookView({
                       const live = liveShows?.find((x) => x.artist === sh.artist && x.date === sh.date);
                       return (
                         <li key={`${sh.artist}-${sh.date}`} className="rounded-lg border border-line bg-paper/60 p-3 text-sm">
-                          <p className="font-semibold">
-                            {sh.artist} · {sh.date} · {sh.venue}
-                            {live?.distance_km != null && <span className="font-normal text-muted"> ({live.distance_km} km)</span>}
-                          </p>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 font-semibold">
+                              {sh.artist} · {sh.date} · {sh.venue}
+                              {live?.distance_km != null && <span className="font-normal text-muted"> ({live.distance_km} km)</span>}
+                            </p>
+                            {live?.fan_match != null && <FanMatch value={live.fan_match} />}
+                          </div>
                           <p className="mt-0.5 leading-snug text-ink-2">{sh.idea}</p>
                           {live?.url && (
                             <a href={live.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-olive underline underline-offset-2">
@@ -432,6 +439,120 @@ export default function PlaybookView({
         </>
       )}
     </div>
+  );
+}
+
+// Qloo affinity of the concert's artist for this restaurant's audience (harness rank workflow).
+function FanMatch({ value }: { value: number }) {
+  return (
+    <span
+      className="shrink-0 whitespace-nowrap rounded-full bg-saffron/20 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-ink"
+      title="How strongly your guests over-index on this artist (Qloo affinity, 0-100)"
+    >
+      Fan match {value}
+    </span>
+  );
+}
+
+const DIRECTION: Record<TrendLine["direction"], { label: string; tone: string; stroke: string }> = {
+  rising: { label: "Rising", tone: "border-olive/25 bg-olive/10 text-olive", stroke: "var(--olive)" },
+  falling: { label: "Falling", tone: "border-terracotta/25 bg-terracotta/10 text-terracotta", stroke: "var(--terracotta)" },
+  steady: { label: "Steady", tone: "border-line bg-paper text-ink-2", stroke: "var(--muted)" },
+  no_data: { label: "No data", tone: "border-line bg-paper text-muted", stroke: "var(--muted)" },
+};
+
+const monthYear = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+
+function trendSentence(s: TrendLine): string {
+  if (s.direction === "no_data" || s.change == null) return `${s.name}: no trend data from Qloo`;
+  const unit = s.metric === "rank" ? "rank places" : "percentile points";
+  const span = s.points.length > 1 ? ` between ${monthYear(s.points[0].date)} and ${monthYear(s.points[s.points.length - 1].date)}` : "";
+  if (s.direction === "steady") return `${s.name}: steady popularity (${s.change >= 0 ? "+" : "minus "}${Math.abs(s.change)} ${unit})${span}`;
+  return `${s.name}: ${s.direction}, ${s.change > 0 ? "up" : "down"} ${Math.abs(s.change)} ${unit}${span}`;
+}
+
+function Sparkline({ series }: { series: TrendLine }) {
+  const W = 96;
+  const H = 28;
+  // Ranks: smaller is better, so flip them to make "up" mean more popular.
+  const ys = series.points.map((pt) => (series.metric === "rank" ? -pt.value : pt.value));
+  const min = Math.min(...ys);
+  const max = Math.max(...ys);
+  const coords = ys.map((v, i) => {
+    const x = ys.length > 1 ? (i / (ys.length - 1)) * (W - 6) + 3 : W / 2;
+    const y = max === min ? H / 2 : H - 3 - ((v - min) / (max - min)) * (H - 6);
+    return [Number(x.toFixed(1)), Number(y.toFixed(1))] as const;
+  });
+  const last = coords[coords.length - 1];
+  const color = DIRECTION[series.direction].stroke;
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={trendSentence(series)} className="shrink-0">
+      <polyline points={coords.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
+      {last && <circle cx={last[0]} cy={last[1]} r={2.4} fill={color} />}
+    </svg>
+  );
+}
+
+// Act 1: which of the restaurant's local peers are gaining or losing popularity (Qloo trends, aggregate).
+function RisingAroundYou({ series, restaurantId }: { series: TrendLine[]; restaurantId?: string }) {
+  const order = { rising: 0, steady: 1, falling: 2, no_data: 3 } as const;
+  const rows = [...series].sort(
+    (a, b) =>
+      Number(b.entity_id === restaurantId) - Number(a.entity_id === restaurantId) ||
+      order[a.direction] - order[b.direction] ||
+      (b.change ?? 0) - (a.change ?? 0),
+  );
+  const dates = series.flatMap((s) => s.points.map((pt) => pt.date)).sort();
+  return (
+    <Section icon={<IconTrend size={16} />} kicker="Rising around you" title="Which local favourites are gaining momentum">
+      <p className="mb-3 max-w-2xl text-[13px] leading-snug text-ink-2">
+        Qloo popularity trends for your restaurant and the places your guests love most nearby
+        {dates.length > 1 ? `, ${monthYear(dates[0])} to ${monthYear(dates[dates.length - 1])}` : ""}. Rising peers show what is
+        working around you right now.
+      </p>
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-paper/50">
+        {rows.map((s) => {
+          const d = DIRECTION[s.direction];
+          const you = s.entity_id === restaurantId;
+          const hasLine = s.direction !== "no_data" && s.points.length > 1;
+          return (
+            <li key={s.entity_id} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
+              <div className="min-w-0 flex-1">
+                <p className="flex min-w-0 items-center gap-2 text-sm">
+                  <span className="truncate font-medium" title={s.name}>
+                    {s.name}
+                  </span>
+                  {you && (
+                    <span className="shrink-0 rounded-full bg-olive px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.1em] text-paper">
+                      You
+                    </span>
+                  )}
+                </p>
+                {!hasLine && <p className="text-[12px] text-muted">No trend data from Qloo for this place</p>}
+              </div>
+              {hasLine && <Sparkline series={s} />}
+              {hasLine && s.change != null && (
+                <span
+                  aria-hidden
+                  className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs tabular-nums ${d.tone}`}
+                >
+                  {d.label}
+                  <span className="font-semibold">
+                    {s.change > 0 ? "+" : s.change < 0 ? "−" : "±"}
+                    {Math.abs(s.change)}
+                  </span>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-3 text-[11px] leading-snug text-muted">
+        Change = average popularity percentile over the last ~30 days minus the first ~30 days, in points out of 100. It describes
+        aggregate momentum, not why it happens or what any one guest will do.
+      </p>
+    </Section>
   );
 }
 

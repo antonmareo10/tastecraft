@@ -106,7 +106,8 @@ export type AgentEvent =
   | { type: "restaurant"; entity: EntityRef & { lat?: number; lon?: number }; resolution?: Resolution }
   | { type: "baseline"; text: string }
   | { type: "compare"; a: string; b: string; tags: { name: string; score?: number }[] }
-  | { type: "shows"; shows: { artist: string; event: string; venue: string; date: string; url?: string; distance_km?: number }[] }
+  | { type: "shows"; shows: ShowRef[] }
+  | { type: "trends"; series: TrendLine[] }
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
   | { type: "playbook"; playbook: Playbook }
@@ -114,6 +115,31 @@ export type AgentEvent =
   | { type: "answer"; question: string; answer: string; evidence: Evidence[] }
   | { type: "error"; message: string }
   | { type: "done"; elapsed_ms: number };
+
+// A live event near the restaurant. fan_match (0-100) is the Qloo affinity of the billed artist for
+// this restaurant's audience, when the concert was ranked through Qloo.
+export type ShowRef = {
+  artist: string;
+  event: string;
+  venue: string;
+  date: string;
+  url?: string;
+  distance_km?: number;
+  fan_match?: number;
+};
+
+export type TrendDirection = "rising" | "falling" | "steady" | "no_data";
+
+// One place's popularity trend (Qloo /v2/trending), summarised by Tastecraft. change is in percentile
+// points (metric "percentile") or rank positions gained (metric "rank"); points are downsampled for the UI.
+export type TrendLine = {
+  entity_id: string;
+  name: string;
+  direction: TrendDirection;
+  change: number | null;
+  metric?: "percentile" | "rank";
+  points: { date: string; value: number }[];
+};
 
 // How sure we are that the Qloo entity is the owner's restaurant (shown to the owner, who can switch).
 export type Resolution = {
