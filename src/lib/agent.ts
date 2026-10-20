@@ -61,6 +61,7 @@ Rules for the playbook:
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
 - High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Use taste_gaps to see what this crowd favours over the city (lift above 1) or avoids (below 1), and weigh it together with the restaurant's identity and kitchen: a good menu move is something this restaurant can credibly serve that its crowd over-indexes on, not a copy of another place's menu. When you use these shares, quote them in the evidence, e.g. on 11% of the menus at your guests' favourite places vs 2% citywide.
 - Give each dish a plain, descriptive menu name.
+- Inside playbook text fields never put words in double quotes (use single quotes or none): the playbook is streamed as JSON and an unescaped double quote breaks it.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
 - week_plan turns everything into next week's schedule (supplier order early in the week, launch, posts timed to when the audience goes out, the event, a review of results).
@@ -848,7 +849,7 @@ Owner's question: ${fu.question}`
       if (fatal || published || fu || !malformedToolJson(err)) throw err;
       // The streamed playbook JSON was malformed (eager streaming skips server-side validation).
       // Ask once more from the same conversation, with a validated publish tool.
-      if (draftId) emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft was malformed; rewriting", error: true });
+      if (draftId) emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "First draft was malformed; rewriting it" });
       draftId = null;
       console.warn("[tastecraft] malformed playbook JSON; retrying the final step once");
       emit({ type: "note", text: "The first draft of the playbook came back malformed, so the agent is writing it again." });

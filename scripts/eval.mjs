@@ -1,7 +1,8 @@
 // Ablation eval: the same model with and without Qloo, on real restaurants.
 // Usage: node scripts/eval.mjs [baseUrl] [limit]
 // Requires the app running with live keys (ANTHROPIC_API_KEY, QLOO_API_KEY).
-// Writes eval/results.local.json (contains Qloo-derived names: NOT committed) and eval/SUMMARY.md (aggregates only).
+// Writes eval/results.local.json (contains Qloo-derived names: NOT committed) and eval/JUDGE_SUMMARY.md (aggregates only).
+// Optional and costly (a full agent run per restaurant); the committed benchmark is scripts/benchmark.ts.
 import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -133,5 +134,5 @@ Run on ${new Date().toISOString().slice(0, 10)} over ${ok.length} restaurants ($
 
 Raw per-restaurant results contain Qloo-derived data and are kept out of the public repository.
 `;
-fs.writeFileSync(new URL("../eval/SUMMARY.md", import.meta.url), summary);
+fs.writeFileSync(new URL("../eval/JUDGE_SUMMARY.md", import.meta.url), summary);
 console.log("\n\n" + summary);

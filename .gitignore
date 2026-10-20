@@ -45,3 +45,4 @@ src/data/demos.json
 /.demos/
 !.env.example
 eval/results.local.json
+eval/benchmark.local.json
