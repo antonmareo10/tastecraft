@@ -182,9 +182,9 @@ export default function PlaybookView({
               domains={live.dna}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {domains.map((d) => (
-              <div key={d} className="rounded-xl border border-line bg-paper/50 p-4">
+              <div key={d} className="min-w-0 rounded-xl border border-line bg-paper/50 p-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
                   {DOMAIN_LABEL[d] ?? d}
                 </p>
@@ -214,8 +214,8 @@ export default function PlaybookView({
 
       {(live.demographics || live.crowdMenu || Object.keys(live.tags).length > 0) && (
         <Section icon={<IconPlate size={16} />} kicker="Cravings & crowd" title="What they crave, and who they are">
-          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {live.crowdMenu && live.crowdMenu.favours.length > 0 && (
                 <div className="rounded-xl border border-olive/25 bg-olive/5 p-4" title={LIFT_HELP}>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">On your crowd’s menus</p>
