@@ -7,7 +7,7 @@
 
 ## Judge in 60 seconds
 
-1. Open the live demo and click **Katz's Delicatessen, New York** under *Instant replays of real runs*. It is a recorded real run (Qloo + Claude), replayed in about 15 seconds.
+1. Open the live demo and click **Gjelina, Los Angeles** (or any of the three) under *Instant replays of real runs*. Each is a recorded real run (Qloo + Claude), replayed in about 15 seconds.
 2. Look at the **crowd lift** badge under the headline: how much more often the restaurants this crowd loves serve the proposed dishes than the city's most popular restaurants, next to the same score for the same model *without* Qloo.
 3. Scroll to **Three dishes to test**: each dish shows its lift and the local-menu counts behind it, and every Qloo fact is marked as checked against the run's own Qloo responses.
 4. **Generic AI vs. Tastecraft** scores both answers with the same formula. **Cravings** shows what is specific to this crowd ("On your crowd's menus" vs the city), and **Head-to-head** shows what only this restaurant, or only its closest rival, is known for.
