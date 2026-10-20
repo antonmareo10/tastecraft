@@ -38,7 +38,7 @@ GET /v2/insights?filter.type=urn:tag&filter.tag.types=urn:tag:specialty_dish:pla
   - **dishes:** `specialty_dish:place`, `menu_highlight:qloo`
   - **cuisines:** `genre:place`, `cuisine:qloo`
   - **vibe:** `ambience:qloo`, `good_for:qloo`, `setting:qloo`
-- **Used for:** the "Cravings" lists and the evidence behind each menu move.
+- **Used for:** the cuisine and vibe lists (shown in Qloo's order) and evidence behind menu moves. These affinities sit near 100 for whatever is popular everywhere (for example fries or tiramisu), so they are not used on their own to pick dishes; step 6 adds the city contrast.
 
 ## 4. Who are they? (demographics)
 
@@ -58,13 +58,16 @@ GET /v2/analysis/compare?a.signal.interests.entities=<RESTAURANT_ID>&b.signal.in
 - **What we read:** with one place per side, the response lists each place's own Qloo tags (`results.a`, `results.b`). Tastecraft shows the tags only one of the two carries, compared by name (a "Deli" genre on one side and a "Deli" cuisine on the other count as shared), and drops payment, access and service-option tags. The merged `results.tags[].query.score` is an undocumented sigmoid weight (tags both places share all sit at 0.731), so it only orders the tags and is never shown as a number.
 - **Used for:** the "Head-to-head" section and the positioning of the menu moves. It describes how Qloo characterises each place, not a measured difference between the two audiences.
 
-## 6. What do locals love that this restaurant doesn't offer? (taste gaps, computed by Tastecraft)
+## 6. What does this crowd favour that the city at large doesn't? (crowd vs city, computed by Tastecraft)
 
 ```
-GET /v2/insights?filter.type=urn:entity:place&signal.interests.entities=<RESTAURANT_ID>&filter.location.query=<city>&filter.exclude.entities=<RESTAURANT_ID>&take=50
+GET /v2/insights?filter.type=urn:entity:place&filter.tags=urn:tag:genre:place:restaurant&filter.location.query=<city>&filter.exclude.entities=<RESTAURANT_ID>&signal.interests.entities=<RESTAURANT_ID>&take=50&page=1..3
+GET /v2/insights?filter.type=urn:entity:place&filter.tags=urn:tag:genre:place:restaurant&filter.location.query=<city>&filter.exclude.entities=<RESTAURANT_ID>&take=50&page=1..3
 ```
 
-- **Computed locally:** for the ~50 local places these guests love most, Tastecraft weights each place's tags by its affinity, ranks the tags and drops the ones the restaurant already carries. A gap is shown with the share of loved places that carry the tag and examples. This is Tastecraft's analysis of Qloo data, and it is labelled as such.
+- **Choice:** the first query returns the ~150 restaurants in the city this audience has the highest affinity for (the *crowd*); the second, the same query without the audience signal, returns the city's ~150 most popular restaurants (the *baseline*). Both are restricted to restaurants so hotels, museums and venues do not distort the comparison.
+- **Computed locally:** for every tag (cuisine, format, vibe) and every food term in the places' menu tags (specialty dishes, menu highlights), Tastecraft compares the share of crowd restaurants that carry it with the share of baseline restaurants that do (lift, add-one smoothed). Tag affinities from step 3 are near 100 for whatever is popular everywhere; this contrast shows what is specific to this crowd.
+- **Used for:** the agent's taste gaps (over-represented tags the restaurant lacks) and menu terms the crowd favours or avoids; the "On your crowd's menus" card; and, at publish time, the **crowd lift** of the plan's dishes and of the no-Qloo baseline's dishes (src/lib/lift.ts).
 
 ## 7. Where in the city does this taste live? (heatmap)
 
@@ -77,9 +80,10 @@ GET /v2/insights?filter.type=urn:heatmap&signal.interests.entities=<RESTAURANT_I
 ## 8. From results to a playbook
 
 1. Every name and score that Qloo returned in this run is recorded in an **evidence ledger** on the server.
-2. Claude writes the playbook through a schema-validated `publish_playbook` tool call. Every evidence line must list the exact names and scores it relies on.
+2. Claude writes the playbook through a schema-validated `publish_playbook` tool call. Every evidence line must list the exact names and scores it relies on. If the streamed JSON is malformed, the last step is retried once with server-validated input.
 3. The server checks each cited name and score against the ledger (±1 on scores) and marks it **verified** (✓) or **not verified** (⚠) before the owner sees it. The header reports how many cited facts were verified.
-4. The UI keeps the two layers apart: **Qloo evidence** (facts, with their check marks) and **Our read** (Tastecraft's interpretation, framed as bets to test).
+4. The server computes the **crowd lift** of the three dishes from their names and the two restaurant sets of step 6, and the same score for the dishes of the same model's answer without Qloo. The model never writes these numbers.
+5. The UI keeps the layers apart: **Qloo evidence** (facts, with their check marks), the crowd lift (computed), and **Our read** (Tastecraft's interpretation, framed as bets to test).
 
 ## Failure handling
 
