@@ -3,7 +3,7 @@
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { runTastecraft } from "@/lib/agent";
-import { acquireLiveRun } from "@/lib/limits";
+import { acquireLiveRun, describeLiveFailure } from "@/lib/limits";
 import { qlooConfigured } from "@/lib/qloo";
 import { audienceAffinity, audienceDemographics, findRestaurant, resolveRestaurant, tasteTags } from "@/lib/qloo-tasks";
 import type { AgentEvent, Playbook } from "@/lib/types";
@@ -86,6 +86,8 @@ const handler = createMcpHandler(
             if (e.type === "playbook") playbook = e.playbook;
             if (e.type === "error") error = e.message;
           });
+        } catch (err) {
+          error = describeLiveFailure(err);
         } finally {
           gate.release();
         }

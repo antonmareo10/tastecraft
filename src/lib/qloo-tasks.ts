@@ -2,7 +2,8 @@
 // model-friendly data plus richer data for the UI.
 
 import ngeohash from "ngeohash";
-import { entitiesFrom, qlooGet, tagName, toEntityRef, type RawEntity, type RawTag } from "./qloo";
+import { rankTerms, smoothedLift, type CrowdSets, type MenuPlace } from "./lift";
+import { entitiesFrom, entityId, qlooGet, tagName, toEntityRef, type RawEntity, type RawTag } from "./qloo";
 import type { EntityRef, HeatCell, Zone, Resolution, ShowRef } from "./types";
 
 export const DOMAINS = ["place", "brand", "artist", "movie", "tv_show", "book", "podcast", "destination"] as const;
@@ -28,13 +29,17 @@ export type RestaurantMatch = EntityRef & {
 };
 
 export async function findRestaurant(name: string, city: string): Promise<RestaurantMatch[]> {
-  const json = await qlooGet("/search", {
-    query: `${name} ${city}`,
-    types: "urn:entity:place",
-    take: 8,
-  });
+  const search = async (query: string) =>
+    entitiesFrom(await qlooGet("/search", { query, types: "urn:entity:place", take: 8 })).map((e) => toRestaurantMatch(e));
+  let results = await search(`${name} ${city}`);
+  // The city words can drown a short name ("Gjelina Los Angeles" returns LA landmarks only):
+  // if nothing carries the name, search the name alone and keep both lists.
+  if (!results.some((r) => nameScore(name, r.name) >= 2)) {
+    const merged = new Map<string, RestaurantMatch>();
+    for (const r of [...(await search(name)), ...results]) if (!merged.has(r.entity_id)) merged.set(r.entity_id, r);
+    results = [...merged.values()];
+  }
   const cityLc = city.toLowerCase();
-  const results = entitiesFrom(json).map((e) => toRestaurantMatch(e));
   // Prefer matches whose address mentions the requested city.
   return results.sort((a, b) => {
     const am = (a.subtitle ?? "").toLowerCase().includes(cityLc) ? 1 : 0;
@@ -213,49 +218,122 @@ export async function compareAudiences(opts: { a: string; b: string; city: strin
   }));
 }
 
-// --- 3. Taste gaps -------------------------------------------------------------
-// Tags that are strongly over-represented among the local places your guests love,
-// weighted by Qloo affinity, minus the tags your own restaurant already has.
+// --- 3. Crowd vs city: the restaurant sets behind taste gaps and crowd lift ----------
+// crowd = the restaurants in the city this restaurant's audience has the highest affinity for;
+// city  = the city's most popular restaurants (same query without the audience signal).
+// Comparing the two separates what this crowd favours from what is simply popular everywhere.
 
-const GENERIC_TAG = /^(restaurant|food|bar|place|point of interest|establishment|dine[- ]?in|takeout|delivery|good for|accepts|wheelchair|reservations|wi-?fi|parking|credit cards?|serves|price|casual|lunch|dinner|open)/i;
+const RESTAURANT_TAG = "urn:tag:genre:place:restaurant";
+const MENU_TAG = /^urn:tag:(specialty_dish:place|menu_highlight:qloo)/;
+export const CROWD_PAGES = 3; // 3 x 50 restaurants per side
+const PAGE_SIZE = 50;
 
-export type GapTag = { tag: string; score: number; share: number; examples: string[] };
+export type CrowdData = { crowd: RawEntity[]; city: RawEntity[] };
+
+async function restaurantsIn(opts: { city: string; exclude: string; signal?: string; lens?: Lens }): Promise<RawEntity[]> {
+  const seen = new Map<string, RawEntity>();
+  for (let page = 1; page <= CROWD_PAGES; page++) {
+    const json = await qlooGet("/v2/insights", {
+      "filter.type": "urn:entity:place",
+      "filter.location.query": opts.city,
+      "filter.tags": RESTAURANT_TAG,
+      "filter.exclude.entities": opts.exclude,
+      "signal.interests.entities": opts.signal,
+      take: PAGE_SIZE,
+      page,
+      ...lensParams(opts.signal ? opts.lens : undefined),
+    });
+    const batch = entitiesFrom(json);
+    for (const e of batch) {
+      const id = entityId(e);
+      if (id && !seen.has(id)) seen.set(id, e);
+    }
+    if (batch.length < PAGE_SIZE) break;
+  }
+  return [...seen.values()];
+}
+
+/** Both restaurant sets for a restaurant's city (cached by qlooGet, so the gaps tool and the crowd-lift score share them). */
+export async function crowdAndCity(opts: { entityId: string; city: string; lens?: Lens }): Promise<CrowdData> {
+  const [crowd, city] = await Promise.all([
+    restaurantsIn({ city: opts.city, exclude: opts.entityId, signal: opts.entityId, lens: opts.lens }),
+    restaurantsIn({ city: opts.city, exclude: opts.entityId }),
+  ]);
+  return { crowd, city };
+}
+
+/** Menu view of the sets for src/lib/lift.ts: places with at least one Qloo menu tag (specialty dish / menu highlight). */
+export function menuSets(data: CrowdData): CrowdSets {
+  const toMenu = (e: RawEntity): MenuPlace => ({
+    name: e.name ?? "",
+    menu: ((e.tags ?? []) as RawTag[]).filter((t) => MENU_TAG.test(String(t.type ?? ""))).map(tagName).filter(Boolean),
+  });
+  return {
+    crowd: data.crowd.map(toMenu).filter((p) => p.menu.length > 0),
+    city: data.city.map(toMenu).filter((p) => p.menu.length > 0),
+  };
+}
+
+// --- 3b. Taste gaps -----------------------------------------------------------------
+// Tags (cuisines, formats, vibes) that the crowd's favourite restaurants carry much more often
+// than the city's most popular ones (lift), minus the tags this restaurant already has.
+
+const GENERIC_TAG = /^(restaurant|food|bar|place|point of interest|establishment|dine[- ]?in|takeout|delivery|good for|accepts|wheelchair|reservations|wi-?fi|parking|credit cards?|debit cards?|serves|price|casual|lunch|dinner|open)/i;
+// Tag families that describe payment, access or location rather than taste.
+const NON_TASTE_TYPE = /^urn:tag:(payments|credit_card|parking|accessibility|age_range|nearby_attraction|neighborhood_characteristic|view)(:|$)|^urn:tag:genre:place$/;
+
+export type GapTag = { tag: string; crowd: number; city: number; crowd_pct: number; city_pct: number; lift: number; examples: string[] };
 
 export async function tasteGaps(opts: {
   restaurant: RestaurantMatch;
   city: string;
   lens?: Lens;
-}): Promise<{ gaps: GapTag[]; sampled: EntityRef[] }> {
-  const json = await qlooGet("/v2/insights", {
-    "filter.type": "urn:entity:place",
-    "signal.interests.entities": opts.restaurant.entity_id,
-    "filter.location.query": opts.city,
-    "filter.exclude.entities": opts.restaurant.entity_id,
-    take: 50,
-    ...lensParams(opts.lens),
-  });
-  const raw = entitiesFrom(json);
+}): Promise<{ gaps: GapTag[]; sampled: EntityRef[]; menu: ReturnType<typeof rankTerms>; crowd_n: number; city_n: number }> {
+  const data = await crowdAndCity({ entityId: opts.restaurant.entity_id, city: opts.city, lens: opts.lens });
   const own = new Set(opts.restaurant.all_tags.map((t) => t.toLowerCase()));
-  const scores = new Map<string, { score: number; count: number; examples: string[] }>();
-  for (const e of raw) {
-    const a = typeof e.query?.affinity === "number" ? e.query.affinity : 0.5;
-    for (const t of (e.tags ?? []) as RawTag[]) {
-      const name = tagName(t);
-      if (!name || GENERIC_TAG.test(name) || own.has(name.toLowerCase())) continue;
-      const cur = scores.get(name) ?? { score: 0, count: 0, examples: [] };
-      cur.score += a;
-      cur.count += 1;
-      if (cur.examples.length < 3 && e.name) cur.examples.push(e.name);
-      scores.set(name, cur);
-    }
-  }
-  const n = Math.max(1, raw.length);
-  const gaps = [...scores.entries()]
-    .map(([tag, v]) => ({ tag, score: v.score, share: v.count / n, examples: v.examples }))
-    .filter((g) => g.share >= 0.08)
-    .sort((x, y) => y.score - x.score)
+  const tagsOf = (e: RawEntity) =>
+    new Set(
+      ((e.tags ?? []) as RawTag[])
+        .filter((t) => !MENU_TAG.test(String(t.type ?? "")) && !NON_TASTE_TYPE.test(String(t.type ?? "")))
+        .map(tagName)
+        .filter((name) => name && !GENERIC_TAG.test(name) && !own.has(name.toLowerCase())),
+    );
+  const count = (places: RawEntity[]) => {
+    const m = new Map<string, number>();
+    for (const e of places) for (const t of tagsOf(e)) m.set(t, (m.get(t) ?? 0) + 1);
+    return m;
+  };
+  const a = count(data.crowd);
+  const b = count(data.city);
+  const nA = data.crowd.length;
+  const nB = data.city.length;
+  const minCount = Math.max(3, Math.ceil(nA * 0.04));
+  const pct = (x: number, n: number) => (n ? Math.round((x / n) * 100) : 0);
+  const gaps = [...a.entries()]
+    .filter(([, crowd]) => crowd >= minCount)
+    .map(([tag, crowd]) => {
+      const city = b.get(tag) ?? 0;
+      return {
+        tag,
+        crowd,
+        city,
+        crowd_pct: pct(crowd, nA),
+        city_pct: pct(city, nB),
+        lift: Math.round(smoothedLift(crowd, nA, city, nB) * 10) / 10,
+        examples: data.crowd.filter((e) => tagsOf(e).has(tag)).slice(0, 3).map((e) => e.name ?? ""),
+      };
+    })
+    .filter((g) => g.lift > 1)
+    .sort((x, y) => y.lift - x.lift || y.crowd - x.crowd)
     .slice(0, 10);
-  return { gaps, sampled: raw.slice(0, 12).map((e) => toEntityRef(e)) };
+  const sets = menuSets(data);
+  return {
+    gaps,
+    sampled: data.crowd.slice(0, 12).map((e) => toEntityRef(e)),
+    menu: rankTerms(sets, { own: opts.restaurant.all_tags }),
+    crowd_n: nA,
+    city_n: nB,
+  };
 }
 
 // --- 4. Taste heatmap ---------------------------------------------------------------

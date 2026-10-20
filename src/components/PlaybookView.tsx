@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { EntityRef, HeatCell, Playbook, Resolution, ShowRef, TrendLine, Zone } from "@/lib/types";
+import type { TermLift } from "@/lib/lift";
+import type { CrowdLift, EntityRef, HeatCell, Playbook, Resolution, ShowRef, TrendLine, Zone } from "@/lib/types";
 import {
   IconBasket,
   IconCheck,
@@ -36,6 +37,18 @@ const DOMAIN_LABEL: Record<string, string> = {
   video_game: "Games",
   person: "People",
 };
+
+/** "×1.8" — crowd lift with one decimal. */
+export function liftLabel(v: number): string {
+  return `×${(Math.round(v * 10) / 10).toFixed(1)}`;
+}
+
+function termLine(t: TermLift, cl: Pick<CrowdLift, "crowd_n" | "city_n">): string {
+  return `${t.term}: on ${t.crowd} of the ${cl.crowd_n} restaurants your guests love most vs ${t.city} of the city's ${cl.city_n} most popular (${liftLabel(t.lift)})`;
+}
+
+const LIFT_HELP =
+  "Crowd lift compares the restaurants this crowd loves most (Qloo affinity) with the city's most popular restaurants. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. Computed by Tastecraft from Qloo data, never written by the model. It says nothing about how many covers a dish will sell.";
 
 function money(v: number, currency: string): string {
   try {
@@ -114,19 +127,16 @@ export default function PlaybookView({
             {p?.headline ? (
               <p className="font-display mt-5 max-w-3xl text-xl leading-snug text-paper sm:text-2xl">“{p.headline}”</p>
             ) : null}
-            {p?.taste_fit ? (
-              <div
-                className="mt-5 inline-flex items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5"
-                title="Mean Qloo affinity of the verified facts the menu moves are built on. Computed from Qloo's numbers, not written by the model. It measures how well the plan fits this crowd's tastes, not how many covers a dish will sell."
-              >
-                <div className="flex items-baseline gap-0.5">
-                  <span className="font-display text-4xl leading-none text-paper">{p.taste_fit.score}</span>
-                  <span className="text-sm text-paper/70">/100</span>
-                </div>
+            {p?.crowd_lift?.score != null ? (
+              <div className="mt-5 inline-flex max-w-xl items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5" title={LIFT_HELP}>
+                <span className="font-display text-4xl leading-none text-paper">{liftLabel(p.crowd_lift.score)}</span>
                 <div className="leading-tight">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Taste-Fit</p>
-                  <p className="text-[11px] text-paper/70">
-                    {p.taste_fit.facts} verified Qloo facts behind {p.taste_fit.moves_grounded} of {p.taste_fit.moves_total} menu moves
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Crowd lift</p>
+                  <p className="text-[11px] text-paper/75">
+                    Your guests’ {p.crowd_lift.crowd_n} favourite restaurants serve dishes like these {liftLabel(p.crowd_lift.score).slice(1)}× as
+                    often as {p.crowd_lift.city}’s {p.crowd_lift.city_n} most popular ({p.crowd_lift.matched} of {p.crowd_lift.total} dishes
+                    matched)
+                    {p.crowd_lift.baseline?.score != null ? ` · same model without Qloo: ${liftLabel(p.crowd_lift.baseline.score)}` : ""}
                   </p>
                 </div>
               </div>
@@ -293,18 +303,18 @@ export default function PlaybookView({
           <Section icon={<IconPlate size={16} />} kicker="Menu moves" title="Three dishes to test next week">
             <div className="grid gap-4 lg:grid-cols-3">
               {p.menu_moves.map((m) => {
-                const fit = m.fit;
+                const cl = p.crowd_lift;
                 return (
                 <article key={m.dish} className="flex flex-col rounded-xl border border-line bg-paper/40 p-4">
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="flex items-baseline gap-2">
                       <h4 className="font-display text-lg leading-tight">{m.dish}</h4>
-                      {fit != null && (
+                      {m.lift != null && cl && (
                         <span
-                          className="shrink-0 rounded-full bg-olive/10 px-1.5 py-0.5 text-[10px] font-semibold text-olive"
-                          title="Taste-Fit for this dish: mean Qloo affinity (0-100) of its verified facts."
+                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${m.lift >= 1 ? "bg-olive/10 text-olive" : "bg-terracotta/10 text-terracotta"}`}
+                          title={[`Crowd lift for this dish: ${liftLabel(m.lift)}`, ...(m.lift_terms ?? []).map((t) => termLine(t, cl))].join("\n")}
                         >
-                          Fit {fit}
+                          {liftLabel(m.lift)}
                         </span>
                       )}
                     </div>
@@ -313,6 +323,17 @@ export default function PlaybookView({
                     </span>
                   </div>
                   <p className="mt-1.5 text-sm leading-snug text-ink-2">{m.description}</p>
+                  {cl && m.lift_terms && m.lift_terms.length > 0 && (
+                    <p className="mt-1.5 text-[11px] leading-snug text-muted" title={LIFT_HELP}>
+                      On local menus:{" "}
+                      {m.lift_terms.map((t, i) => (
+                        <span key={t.term}>
+                          {i > 0 && " · "}
+                          <span className="text-ink-2">{t.term}</span> {t.crowd} of {cl.crowd_n} vs {t.city} of {cl.city_n}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   <p className="mt-3 text-[13px] leading-snug">
                     <span className="font-semibold">Our read: </span>
                     {m.why}
@@ -845,25 +866,55 @@ function ShoppingList({ playbook: p }: { playbook: Playbook }) {
 }
 
 function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbook }) {
+  const cl = p.crowd_lift;
+  const generic = cl?.baseline;
+  const event = /^\s*(?:event|evento)\s*[:.-]\s*(.+)$/im.exec(baseline)?.[1];
   return (
     <Section icon={<IconSpark size={16} />} kicker="Why taste data matters" title="Generic AI vs. Tastecraft">
+      {cl?.score != null && generic?.score != null && (
+        <p className="mb-3 text-[13px] leading-snug text-ink-2" title={LIFT_HELP}>
+          Same crowd-lift formula on both sets of dishes: <span className="font-semibold text-terracotta">{liftLabel(generic.score)}</span> without
+          Qloo vs <span className="font-semibold text-olive">{liftLabel(cl.score)}</span> with Qloo (×1.0 = no different from {cl.city}’s
+          most popular restaurants).
+        </p>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-line bg-paper/40 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model, no Qloo</p>
-          <p className="mt-1 text-[11px] text-muted">Taste-Fit: n/a — no verified Qloo facts to stand on</p>
-          <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-2">{baseline}</p>
+          {generic?.score != null && (
+            <p className="mt-1 text-[11px] font-semibold text-muted">
+              Crowd lift {liftLabel(generic.score)} · {generic.matched} of {generic.total} dishes matched on local menus
+            </p>
+          )}
+          {generic && generic.dishes.length > 0 ? (
+            <ul className="mt-2 space-y-2 text-sm leading-relaxed text-ink-2">
+              {generic.dishes.map((d) => (
+                <li key={d.dish} title={cl ? d.terms.map((t) => termLine(t, cl)).join("\n") : undefined}>
+                  <span className="font-semibold">{d.dish}</span> {d.lift != null ? `— ${liftLabel(d.lift)}` : "— no match on local menus"}
+                </li>
+              ))}
+              {event && (
+                <li>
+                  <span className="font-semibold">Event:</span> {event}
+                </li>
+              )}
+            </ul>
+          ) : (
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-2">{baseline}</p>
+          )}
         </div>
         <div className="rounded-xl border border-olive/30 bg-olive/5 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">Tastecraft, grounded in Qloo</p>
-          {p.taste_fit && (
+          {cl?.score != null && (
             <p className="mt-1 text-[11px] font-semibold text-olive">
-              Taste-Fit: {p.taste_fit.score}/100 — {p.taste_fit.facts} verified Qloo facts
+              Crowd lift {liftLabel(cl.score)} · {cl.matched} of {cl.total} dishes matched on local menus
             </p>
           )}
           <ul className="mt-2 space-y-2 text-sm leading-relaxed">
             {p.menu_moves.map((m) => (
               <li key={m.dish}>
-                <span className="font-semibold">{m.dish}</span> — {m.evidence[0]?.text ?? m.why}
+                <span className="font-semibold">{m.dish}</span>
+                {m.lift != null ? ` (${liftLabel(m.lift)})` : ""} — {m.evidence[0]?.text ?? m.why}
               </li>
             ))}
             {p.taste_gaps[0] && (

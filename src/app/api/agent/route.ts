@@ -1,5 +1,5 @@
 import { genericBaseline, runTastecraft } from "@/lib/agent";
-import { acquireLiveRun, clientIp } from "@/lib/limits";
+import { acquireLiveRun, clientIp, describeLiveFailure, liveRunsDisabled } from "@/lib/limits";
 import { encodeLine } from "@/lib/ndjson";
 import { qlooConfigured } from "@/lib/qloo";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
@@ -63,11 +63,10 @@ export async function POST(request: Request) {
   }
 
   if (!qlooConfigured() || !process.env.ANTHROPIC_API_KEY) {
-    return Response.json(
-      { error: "Live mode is not configured on this server yet. Open one of the recorded real runs instead." },
-      { status: 503 },
-    );
+    return Response.json({ error: "Live mode is not configured on this server." }, { status: 503 });
   }
+  const disabled = liveRunsDisabled();
+  if (disabled) return Response.json({ error: disabled }, { status: 503 });
   const gate = acquireLiveRun(clientIp(request));
   if (!gate.ok) return Response.json({ error: gate.reason }, { status: 429 });
 
@@ -82,13 +81,15 @@ export async function POST(request: Request) {
           closed = true;
         }
       };
-      const baseline = (req.followup ? Promise.reject() : genericBaseline(req))
-        .then((text) => emit({ type: "baseline", text }))
-        .catch(() => undefined);
+      // The no-Qloo answer runs in parallel; the agent scores its dishes with the same crowd-lift formula.
+      const baselineText: Promise<string | null> = req.followup ? Promise.resolve(null) : genericBaseline(req).catch(() => null);
+      const baseline = baselineText.then((text) => {
+        if (text) emit({ type: "baseline", text });
+      });
       try {
-        await runTastecraft(req, emit, request.signal);
+        await runTastecraft(req, emit, request.signal, { baseline: baselineText });
       } catch (err) {
-        emit({ type: "error", message: err instanceof Error ? err.message : "Unexpected error" });
+        emit({ type: "error", message: describeLiveFailure(err) });
       }
       await baseline;
       emit({ type: "done", elapsed_ms: Date.now() - started });

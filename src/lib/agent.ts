@@ -5,7 +5,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { matchConcerts } from "./concerts";
-import { EvidenceLedger, tasteFit } from "./ledger";
+import { EvidenceLedger } from "./ledger";
+import { parseBaselineDishes, planLift } from "./lift";
 import { QlooError } from "./qloo";
 import type { HarnessError } from "./qloo-harness";
 import {
@@ -14,6 +15,8 @@ import {
   audienceAffinity,
   audienceDemographics,
   compareAudiences,
+  crowdAndCity,
+  menuSets,
   nearbyGames,
   showsConfigured,
   tasteTags,
@@ -28,7 +31,7 @@ import {
 } from "./qloo-tasks";
 import { DEFAULT_TREND_DAYS, risingNearby } from "./rising";
 import { toTrendLine } from "./trends";
-import type { AgentEvent, AgentRequest, Playbook } from "./types";
+import type { AgentEvent, AgentRequest, CrowdLift, Playbook } from "./types";
 
 const MODEL = process.env.TASTECRAFT_MODEL || "claude-opus-5-5";
 
@@ -40,7 +43,7 @@ How you work:
 3. Once the "place" results are in, run rising_nearby with the restaurant's entity_id plus the 3-4 highest-affinity local places, to see which of them are gaining or losing popularity. Rising peers are evidence of what is working nearby ("copy what's working nearby"); describe them as aggregate popularity trends over the window, never as the cause of anything.
 4. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
 5. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
-6. Run taste_gaps to see which cuisines, dishes and formats the guests love nearby that this restaurant does not offer.
+6. Run taste_gaps. It contrasts the ~150 restaurants this crowd loves most in the city with the city's ~150 most popular restaurants, so you can tell what this crowd specifically favours from what is simply popular everywhere: menu terms the crowd favours (lift above 1) or avoids (lift below 1), and cuisines, formats and vibes their favourite places have that this restaurant lacks.
 7. If the nearby_shows tool is available, run it (pass the top artists from the music results; they are only a fallback) and set include_sports when a stadium or arena is likely nearby. It ranks the concerts near the restaurant by fan_match, Qloo's 0-100 affinity of each billed artist for this audience; turn the best-matched ones into pre- or post-event ideas.
 8. Run taste_map to see where in the city people with this taste live and go out.
 9. If the goal is about a specific audience (younger crowd, families, women, men), run one audience_affinity or taste_gaps call with the matching lens and compare.
@@ -53,6 +56,8 @@ Rules for the playbook:
 - Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
+- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Prefer dishes built on menu terms this crowd favours over the city (taste_gaps lift above 1), avoid terms it under-indexes on unless the goal requires them, and say so in the evidence ("on 11% of the menus your guests' favourite places carry vs 2% citywide").
+- Give each dish a plain menu name that says what it is (the food a guest would order). Tastecraft scores each dish name against what this crowd's favourite restaurants actually serve (the playbook's crowd lift), so do not pad names with extra keywords.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
 - week_plan turns everything into next week's schedule (supplier order early in the week, launch, posts timed to when the audience goes out, the event, a review of results).
@@ -167,7 +172,12 @@ function shortMessage(err: unknown): string {
   return String(err);
 }
 
-export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: AbortSignal): Promise<void> {
+export type RunOptions = {
+  // The "same model, no Qloo" answer generated in parallel; scored with the same crowd-lift formula.
+  baseline?: Promise<string | null>;
+};
+
+export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: AbortSignal, opts: RunOptions = {}): Promise<void> {
   const client = new Anthropic();
   const fu = req.followup;
   let restaurant: RestaurantMatch | null = fu
@@ -322,7 +332,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
   const gapsTool = betaZodTool({
     name: "taste_gaps",
     description:
-      "Computes taste gaps: tags (cuisines, dishes, formats, vibes) that are over-represented among the ~50 local places the restaurant's guests love most, weighted by Qloo affinity, excluding tags the restaurant already has. Returns each tag with a weighted score, the share of sampled places that carry it and example places.",
+      "Crowd vs city: compares the ~150 restaurants in the city the restaurant's guests love most (Qloo affinity) with the city's ~150 most popular restaurants. Returns menu terms (dishes, ingredients) the crowd's favourite restaurants serve far more or far less often than the city's (lift), and gap tags (cuisines, formats, vibes) over-represented among the crowd's places that this restaurant lacks, each with crowd_pct, city_pct, lift and examples.",
     inputSchema: z.object({
       city: z.string(),
       lens_age: z.string().optional(),
@@ -337,27 +347,44 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       }
       try {
         const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
-        const { gaps, sampled } = await tasteGaps({ restaurant, city: input.city, lens });
+        const { gaps, sampled, menu, crowd_n, city_n } = await tasteGaps({ restaurant, city: input.city, lens });
         for (const g of gaps) {
-          ledger.record(g.tag, "taste_gaps", g.share * 100);
+          ledger.record(g.tag, "taste_gaps", g.crowd_pct);
+          ledger.record(g.tag, "taste_gaps", g.city_pct);
+          ledger.record(g.tag, "taste_gaps", g.lift);
           g.examples.forEach((ex) => ledger.record(ex, "taste_gaps"));
         }
+        for (const t of [...menu.over, ...menu.under]) {
+          ledger.record(t.term, "taste_gaps", (t.crowd / Math.max(1, crowd_n)) * 100);
+          ledger.record(t.term, "taste_gaps", (t.city / Math.max(1, city_n)) * 100);
+          ledger.record(t.term, "taste_gaps", t.lift);
+        }
         for (const e of sampled) ledger.record(e.name, "taste_gaps", e.affinity != null ? e.affinity * 100 : null, { affinity: true });
+        const pct = (x: number, n: number) => (n ? Math.round((x / n) * 100) : 0);
+        const fav = menu.over.slice(0, 3).map((t) => `${t.term} ×${t.lift.toFixed(1)}`);
         emit({
           type: "tool_end",
           id,
           tool: "taste_gaps",
-          summary: gaps.length ? `Top gaps: ${gaps.slice(0, 3).map((g) => g.tag).join(", ")}` : "No clear gaps",
+          summary: fav.length
+            ? `Your crowd favours: ${fav.join(", ")}`
+            : gaps.length
+              ? `Top gaps: ${gaps.slice(0, 3).map((g) => g.tag).join(", ")}`
+              : "No clear gaps",
           entities: sampled.slice(0, 5),
         });
         return JSON.stringify({
+          how: `crowd = the ${crowd_n} restaurants in ${input.city} this restaurant's guests love most (Qloo affinity); city = the ${city_n} most popular restaurants there. pct = share of each set whose Qloo tags include it; lift = how many times more often the crowd's restaurants have it (1 = same as the city, below 1 = the crowd avoids it).`,
           restaurant_tags: restaurant.all_tags.slice(0, 15),
-          gaps: gaps.map((g) => ({
-            tag: g.tag,
-            weighted_score: Number(g.score.toFixed(2)),
-            share_of_loved_places_pct: Math.round(g.share * 100),
-            examples: g.examples,
+          menu_terms_crowd_favours: menu.over.map((t) => ({
+            term: t.term,
+            crowd_pct: pct(t.crowd, crowd_n),
+            city_pct: pct(t.city, city_n),
+            lift: t.lift,
+            already_on_your_menu: t.on_your_menu,
           })),
+          menu_terms_crowd_avoids: menu.under.map((t) => ({ term: t.term, crowd_pct: pct(t.crowd, crowd_n), city_pct: pct(t.city, city_n), lift: t.lift })),
+          gaps: gaps.map((g) => ({ tag: g.tag, crowd_pct: g.crowd_pct, city_pct: g.city_pct, lift: g.lift, examples: g.examples })),
         });
       } catch (err) {
         emit({ type: "tool_end", id, tool: "taste_gaps", summary: short(err), error: true });
@@ -660,7 +687,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         return { ...m, evidence: v.items };
       });
       pb.verification = { checked, verified, qloo_facts: ledger.size };
-      pb.taste_fit = tasteFit(pb.menu_moves, ledger);
+      pb.crowd_lift = await crowdLiftFor(pb, restaurant?.entity_id ?? pb.restaurant.qloo_entity_id, req.city, opts.baseline);
       emit({ type: "playbook", playbook: pb });
       emit({ type: "tool_end", id, tool: "publish_playbook", summary: "Playbook ready" });
       return "Published.";
@@ -736,6 +763,7 @@ Owner's question: ${fu.question}`
 
   let lastDraftAt = 0;
   let draftId: string | null = null;
+  const usage = { input: 0, cache_write: 0, cache_read: 0, output: 0, turns: 0 };
   try {
     for await (const stream of runner) {
       stream.on("streamEvent", (event, snapshot) => {
@@ -752,6 +780,11 @@ Owner's question: ${fu.question}`
         emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
       });
       const message = await stream.finalMessage();
+      usage.turns += 1;
+      usage.input += message.usage.input_tokens ?? 0;
+      usage.cache_write += message.usage.cache_creation_input_tokens ?? 0;
+      usage.cache_read += message.usage.cache_read_input_tokens ?? 0;
+      usage.output += message.usage.output_tokens ?? 0;
       if (draftId) {
         emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft complete" });
         draftId = null;
@@ -771,6 +804,9 @@ Owner's question: ${fu.question}`
       return;
     }
     throw err;
+  } finally {
+    // Token accounting for budget tracking (counts only: no content, no keys).
+    console.info(`[tastecraft] ${fu ? "followup" : "playbook"} usage ${MODEL}: ${JSON.stringify(usage)}`);
   }
   if (fatal && !published) {
     emit({ type: "error", message: fatal });
@@ -793,20 +829,73 @@ async function geocodeCity(city: string): Promise<{ lat: number; lon: number } |
   }
 }
 
-// Same model, no tools, no Qloo: the "generic AI" answer we show side by side.
+// Crowd lift of the plan's dishes and, with the same Qloo sets, of the no-Qloo baseline's dishes.
+// Best effort: a Qloo failure here leaves the playbook without a score rather than failing it.
+async function crowdLiftFor(
+  pb: Playbook,
+  entityId: string | null | undefined,
+  city: string,
+  baseline: Promise<string | null> | undefined,
+): Promise<CrowdLift | undefined> {
+  if (!entityId) return undefined;
+  try {
+    const sets = menuSets(await crowdAndCity({ entityId, city }));
+    if (!sets.crowd.length || !sets.city.length) return undefined;
+    const plan = planLift(
+      pb.menu_moves.map((m) => m.dish),
+      sets,
+    );
+    pb.menu_moves.forEach((m, i) => {
+      m.lift = plan.dishes[i]?.lift ?? null;
+      m.lift_terms = plan.dishes[i]?.terms ?? [];
+    });
+    const result: CrowdLift = {
+      score: plan.lift,
+      matched: plan.matched,
+      total: plan.total,
+      crowd_n: plan.crowd_n,
+      city_n: plan.city_n,
+      city,
+    };
+    const text = baseline
+      ? await Promise.race([baseline.catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000))])
+      : null;
+    const dishes = text ? parseBaselineDishes(text) : [];
+    if (dishes.length) {
+      const b = planLift(dishes, sets);
+      result.baseline = {
+        score: b.lift,
+        matched: b.matched,
+        total: b.total,
+        dishes: b.dishes.map((d) => ({ dish: d.dish, lift: d.lift, terms: d.terms })),
+      };
+    }
+    return result;
+  } catch (err) {
+    console.warn(`[tastecraft] crowd lift unavailable: ${shortMessage(err)}`);
+    return undefined;
+  }
+}
+
+// Same model, no tools, no Qloo: the "generic AI" answer we show side by side. The fixed line
+// format lets Tastecraft score its three dishes with the same crowd-lift formula as the playbook.
+export function baselinePrompt(req: AgentRequest): string {
+  return `I own the restaurant "${req.restaurant}" in ${req.city}. My goal: ${req.goal || "grow the business"}. Suggest three dishes to add and one event idea. Plain text, max 90 words, no markdown. Answer in ${req.language ?? "English"}, but keep these English line labels exactly:
+Dish 1: <dish name> | <why, one short sentence>
+Dish 2: <dish name> | <why>
+Dish 3: <dish name> | <why>
+Event: <event idea>`;
+}
+
 export async function genericBaseline(req: AgentRequest): Promise<string> {
   const client = new Anthropic();
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 1200,
     output_config: { effort: "low" },
-    messages: [
-      {
-        role: "user",
-        content: `I own the restaurant "${req.restaurant}" in ${req.city}. My goal: ${req.goal || "grow the business"}. Suggest three dishes to add and one event idea. Plain text, max 90 words, no markdown. Answer in ${req.language ?? "English"}.`,
-      },
-    ],
+    messages: [{ role: "user", content: baselinePrompt(req) }],
   });
+  console.info(`[tastecraft] baseline usage ${MODEL}: ${JSON.stringify({ input: res.usage.input_tokens, output: res.usage.output_tokens })}`);
   return res.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)

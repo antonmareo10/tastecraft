@@ -83,9 +83,9 @@ export const FIXTURE: AgentEvent[] = [
     audience_dna: { summary: "[DEV FIXTURE] Synthetic summary for layout review.", signals: [] },
     taste_gaps: [ { tag: "Vermouth bar", evidence: "Sample evidence", opportunity: "Sample opportunity text for layout." }, { tag: "Late-night menu", evidence: "Sample evidence", opportunity: "Sample opportunity text." } ],
     menu_moves: [
-      { dish: "Sample dish one", description: "Layout text.", price: 14, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Croquetas", score: 93 }], verified: true }, { text: "Sample fact 2", cites: [{ name: "Unknown", score: 50 }], verified: false }], ingredients: [], fit: 93 },
-      { dish: "Sample dish two", description: "Layout text.", price: 9.5, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [], fit: 86 },
-      { dish: "Sample dish three", description: "Layout text.", price: 12, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [], fit: 86 },
+      { dish: "Sample dish one", description: "Layout text.", price: 14, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Croquetas", score: 93 }], verified: true }, { text: "Sample fact 2", cites: [{ name: "Unknown", score: 50 }], verified: false }], ingredients: [], lift: 2.1, lift_terms: [{ term: "Sample term", crowd: 9, city: 4, lift: 2.1 }] },
+      { dish: "Sample dish two", description: "Layout text.", price: 9.5, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [], lift: 1.4, lift_terms: [{ term: "Sample term", crowd: 6, city: 4, lift: 1.4 }] },
+      { dish: "Sample dish three", description: "Layout text.", price: 12, why: "Layout text.", evidence: [{ text: "Sample fact 1", cites: [{ name: "Vermouth", score: 86 }], verified: true }], ingredients: [], lift: 1.4, lift_terms: [{ term: "Sample term", crowd: 6, city: 4, lift: 1.4 }] },
     ],
     experience: {
       event_idea: "Sample event title",
@@ -108,7 +108,7 @@ export const FIXTURE: AgentEvent[] = [
     ],
     caveats: ["[DEV FIXTURE] synthetic data"],
     verification: { checked: 4, verified: 3, qloo_facts: 40 },
-    taste_fit: { score: 88, facts: 3, moves_grounded: 3, moves_total: 3 },
+    crowd_lift: { score: 1.6, matched: 3, total: 3, crowd_n: 140, city_n: 140, city: "Madrid", baseline: { score: 0.9, matched: 2, total: 3, dishes: [] } },
   } },
   { type: "tool_end", id: "t6", tool: "publish_playbook", summary: "Playbook ready" },
 ];

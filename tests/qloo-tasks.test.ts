@@ -50,35 +50,77 @@ describe("audienceAffinity", () => {
   });
 });
 
+describe("findRestaurant", () => {
+  it("searches the name alone when the city words drown it, and the resolver then picks the restaurant", async () => {
+    const calls = mockFetch((url) => ({
+      results:
+        url.searchParams.get("query") === "Gjelina"
+          ? [{ entity_id: "G1", name: "Gjelina", properties: { address: "1429 Abbot Kinney Blvd Venice, CA 90291" } }]
+          : [{ entity_id: "L1", name: "Los Angeles Convention Center", properties: { address: "1201 S Figueroa St Los Angeles, CA" } }],
+    }));
+    const { findRestaurant, resolveRestaurant } = await load();
+    const matches = await findRestaurant("Gjelina", "Los Angeles");
+    expect(calls.map((u) => u.searchParams.get("query"))).toEqual(["Gjelina Los Angeles", "Gjelina"]);
+    expect(resolveRestaurant("Gjelina", "Los Angeles", matches).selected?.entity_id).toBe("G1");
+  });
+
+  it("does not search again when the first results carry the name", async () => {
+    const calls = mockFetch(() => ({ results: [{ entity_id: "K1", name: "Katz's Delicatessen", properties: { address: "205 E Houston St New York" } }] }));
+    const { findRestaurant } = await load();
+    await findRestaurant("Katz's Delicatessen", "New York");
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe("tasteGaps", () => {
-  it("weights tags by affinity, drops the restaurant's own and generic tags", async () => {
-    const place = (id: string, a: number, tags: string[]) => ({
-      entity_id: id,
-      name: `Place ${id}`,
-      query: { affinity: a },
-      tags: tags.map((t) => ({ name: t })),
-    });
-    mockFetch(() => ({
-      results: {
-        entities: [
-          place("1", 0.9, ["Vermouth", "Tapas", "Restaurant"]),
-          place("2", 0.8, ["Vermouth", "Natural wine"]),
-          place("3", 0.5, ["Natural wine"]),
-          place("4", 0.4, ["Karaoke"]),
-        ],
-      },
+  type Tag = { name: string; type: string };
+  const tag = (name: string, type = "urn:tag:ambience:qloo"): Tag => ({ name, type });
+  const dish = (name: string): Tag => tag(name, "urn:tag:specialty_dish:place");
+  const place = (id: string, tags: Tag[]) => ({ entity_id: id, name: `Place ${id}`, query: { affinity: 0.9 }, tags });
+  // crowd: 6 restaurants the audience loves; city: the 6 most popular restaurants (no audience signal)
+  const crowd = [
+    place("c1", [tag("Vermouth"), tag("Tapas"), tag("Restaurant", "urn:tag:genre:place:restaurant"), tag("Visa", "urn:tag:payments:place"), dish("Croquetas de jamón")]),
+    place("c2", [tag("Vermouth"), tag("Natural wine"), tag("Visa", "urn:tag:payments:place"), dish("Croquetas de jamón")]),
+    place("c3", [tag("Vermouth"), tag("Natural wine"), dish("Croquetas de jamón")]),
+    place("c4", [tag("Vermouth"), tag("Natural wine"), dish("Croquetas de jamón"), dish("Burger")]),
+    place("c5", [tag("Tapas")]),
+    place("c6", [tag("Karaoke")]),
+  ];
+  const city = [
+    place("t1", [tag("Vermouth"), tag("Natural wine"), dish("Burger")]),
+    place("t2", [tag("Natural wine"), dish("Burger")]),
+    place("t3", [tag("Natural wine"), dish("Burger")]),
+    place("t4", [dish("Burger")]),
+    place("t5", [dish("Burger")]),
+    place("t6", [dish("Burger")]),
+  ];
+
+  it("ranks tags the crowd's restaurants carry more often than the city's, minus own, generic and non-taste tags", async () => {
+    const calls = mockFetch((url) => ({
+      results: { entities: url.searchParams.get("signal.interests.entities") ? crowd : city },
     }));
     const { tasteGaps } = await load();
-    const { gaps } = await tasteGaps({
+    const { gaps, menu, crowd_n, city_n } = await tasteGaps({
       restaurant: { entity_id: "R1", name: "R", all_tags: ["Tapas"] },
       city: "Madrid",
     });
-    const names = gaps.map((g) => g.tag);
-    expect(names[0]).toBe("Vermouth"); // 0.9 + 0.8
-    expect(names).toContain("Natural wine");
-    expect(names).not.toContain("Tapas"); // already on the menu
-    expect(names).not.toContain("Restaurant"); // generic
-    expect(gaps[0].examples).toEqual(["Place 1", "Place 2"]);
+    expect([crowd_n, city_n]).toEqual([6, 6]);
+    // Vermouth: crowd 4/6, city 1/6 -> (5/8)/(2/8) = 2.5. Natural wine: 3 vs 3 -> 1.0, not a gap.
+    expect(gaps.map((g) => g.tag)).toEqual(["Vermouth"]);
+    expect(gaps[0]).toMatchObject({ crowd: 4, city: 1, crowd_pct: 67, city_pct: 17, lift: 2.5 });
+    expect(gaps[0].examples).toEqual(["Place c1", "Place c2", "Place c3"]);
+    // Menu terms: croquetas favoured, burgers avoided.
+    expect(menu.over.map((t) => t.term)).toEqual(["Croquetas de jamón"]);
+    expect(menu.under.map((t) => t.term)).toEqual(["Burger"]);
+    // Both sets are restaurants in the city, without the restaurant itself; only the crowd has the audience signal.
+    const [a, b] = calls;
+    for (const u of [a, b]) {
+      expect(u.searchParams.get("filter.tags")).toBe("urn:tag:genre:place:restaurant");
+      expect(u.searchParams.get("filter.location.query")).toBe("Madrid");
+      expect(u.searchParams.get("filter.exclude.entities")).toBe("R1");
+      expect(u.searchParams.get("page")).toBe("1");
+    }
+    expect(calls.filter((u) => u.searchParams.get("signal.interests.entities") === "R1")).toHaveLength(1); // short page: no page 2
   });
 });
 

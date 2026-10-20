@@ -1,7 +1,7 @@
 // Evidence ledger: every fact Qloo returned during a run, so the server can verify each
 // claim in the playbook against what the API actually said (not what the model remembers).
 
-import type { Evidence, MenuMove, Playbook } from "./types";
+import type { Evidence } from "./types";
 
 export function normalizeName(s: string): string {
   return s
@@ -21,9 +21,8 @@ export class EvidenceLedger {
   /**
    * Record a name Qloo returned. `scores` keeps every number seen for the name and backs
    * cite verification. `opts.affinity` marks the number as a genuine audience-affinity
-   * score (0-100) — only those feed the Taste-Fit. Popularity, trend change, demographic
-   * over/under-index, gap-share and comparison deltas are recorded for verification but
-   * must NOT be mistaken for affinity.
+   * score (0-100), kept apart so affinityOf() never mistakes a name's popularity, trend change,
+   * demographic over/under-index, gap share or comparison delta for its affinity.
    */
   record(name: string | undefined | null, source: string, score?: number | null, opts?: { affinity?: boolean }) {
     if (!name) return;
@@ -76,39 +75,4 @@ export class EvidenceLedger {
   get size(): number {
     return this.facts.size;
   }
-}
-
-/**
- * Taste-Fit Score: a single 0-100 number for how strongly the plan's dishes lean on things
- * this restaurant's audience actually over-indexes on. It is the mean Qloo affinity of the
- * *verified* facts the menu moves cite — computed from Qloo's own numbers, never asked of the
- * model. A high score means the plan is built on strong, checked audience signals; it says
- * nothing about how many covers a dish will sell (that is what the one-week test is for).
- */
-export function tasteFit(moves: MenuMove[], ledger: EvidenceLedger): Playbook["taste_fit"] | undefined {
-  const affinities: number[] = [];
-  let grounded = 0;
-  for (const m of moves) {
-    const moveAffinities: number[] = [];
-    for (const e of m.evidence) {
-      if (!e.verified) continue;
-      for (const c of e.cites) {
-        const a = ledger.affinityOf(c.name);
-        if (a != null) moveAffinities.push(a);
-      }
-    }
-    // Attach each dish's own fit from the SAME affinity numbers, so the per-dish badge and the
-    // headline are one computation — the UI renders this rather than re-deriving from the model's
-    // quoted scores (which could drift from, or inflate past, what Qloo actually said).
-    if (moveAffinities.length > 0) {
-      grounded += 1;
-      m.fit = Math.round(moveAffinities.reduce((sum, a) => sum + a, 0) / moveAffinities.length);
-      for (const a of moveAffinities) affinities.push(a);
-    } else {
-      m.fit = null;
-    }
-  }
-  if (affinities.length === 0) return undefined;
-  const score = Math.round(affinities.reduce((sum, a) => sum + a, 0) / affinities.length);
-  return { score, facts: affinities.length, moves_grounded: grounded, moves_total: moves.length };
 }

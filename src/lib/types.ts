@@ -1,5 +1,7 @@
 // Shared types between the agent (server) and the UI (client).
 
+import type { TermLift } from "./lift";
+
 export type EntityRef = {
   entity_id: string;
   name: string;
@@ -45,10 +47,23 @@ export type MenuMove = {
   why: string;
   evidence: Evidence[];
   ingredients: Ingredient[];
-  // Per-dish Taste-Fit (0-100): mean Qloo affinity of this dish's verified cited facts.
-  // Computed server-side from Qloo's own numbers (same source as the headline taste_fit),
-  // never asked of the model. null when the dish has no verified affinity to stand on.
-  fit?: number | null;
+  // Per-dish crowd lift (see src/lib/lift.ts), computed server-side from Qloo data and the dish
+  // name, never asked of the model. null when no food term of the dish appears on local menus.
+  lift?: number | null;
+  lift_terms?: TermLift[];
+};
+
+// How much more this restaurant's crowd favours the plan's dishes than the city at large
+// (geometric mean of per-dish lifts; 1 = same as the city). Server-computed from Qloo.
+export type CrowdLift = {
+  score: number | null;
+  matched: number; // dishes with at least one food term on local menus
+  total: number;
+  crowd_n: number; // restaurants (with menu data) the crowd loves most
+  city_n: number; // the city's most popular restaurants (with menu data)
+  city: string;
+  // The same formula applied to the "same model, no Qloo" baseline's dishes, when available.
+  baseline?: { score: number | null; matched: number; total: number; dishes: { dish: string; lift: number | null; terms: TermLift[] }[] };
 };
 
 export type Playbook = {
@@ -82,9 +97,7 @@ export type Playbook = {
   week_plan: { day: string; action: string; owner: string }[];
   caveats: string[];
   verification?: { checked: number; verified: number; qloo_facts: number };
-  // How strongly the plan leans on things this audience over-indexes on (mean Qloo affinity of
-  // the verified facts the menu moves cite), 0-100. Computed server-side, never asked of the model.
-  taste_fit?: { score: number; facts: number; moves_grounded: number; moves_total: number };
+  crowd_lift?: CrowdLift;
 };
 
 export type AgentEvent =
