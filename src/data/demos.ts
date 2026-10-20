@@ -1,5 +1,7 @@
 // Recorded REAL agent runs (Qloo + Claude), replayed instantly so judges don't wait.
-// Files are produced by `node scripts/record-demo.mjs` against the live agent; never hand-written.
+// Produced by `npm run record-demo` against the live agent; never hand-written. The JSON holds
+// Qloo data, so it is gitignored: deployments download an encrypted copy at build time
+// (scripts/ensure-demos.mjs, TASTECRAFT_DEMOS_URL + TASTECRAFT_DEMOS_KEY) and keep it server-side.
 import type { AgentEvent, AgentRequest } from "@/lib/types";
 
 export type RecordedEvent = AgentEvent & { t: number }; // ms since the run started

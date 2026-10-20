@@ -12,6 +12,7 @@
     "predev": "node scripts/ensure-demos.mjs",
     "prebuild": "node scripts/ensure-demos.mjs",
     "record-demo": "node scripts/record-demo.mjs",
+    "pack-demos": "node scripts/pack-demos.mjs",
     "test": "vitest run",
     "eval": "node scripts/eval.mjs"
   },
