@@ -56,6 +56,12 @@ describe("dishTerms", () => {
     expect(dishTerms("Fried Chicken Sandwich", vocab).map((t) => t.key)).toEqual(["fried chicken"]);
   });
 
+  it("ignores season and temperature words, so a seasonal label does not dilute a dish", () => {
+    const v = indexMenus([place("A", "Cocido madrileño", "Spring rolls", "Otoño menu")]);
+    expect(dishTerms("Cocido madrileño de otoño", v).map((t) => t.key)).toEqual(["cocido madrileno"]);
+    expect(dishTerms("Vegetable spring rolls", v).map((t) => t.key)).toEqual(["spring roll"]);
+  });
+
   it("only looks at the core of the dish name", () => {
     expect(dishTerms("Dumplings with Hot Pastrami", vocab).map((t) => t.key)).toEqual(["dumpling"]);
   });

@@ -56,7 +56,9 @@ const NOT_A_DISH = new Set(
     "build own happy hour craft double triple " +
     "smoked grilled fried roasted baked braised charred spicy crispy loaded hot cold sweet sour slow " +
     "wood fired stuffed glazed crusted topped dusted whole half square round black white red green golden local " +
+    "warm chilled iced autumn fall winter summer spring holiday festive " +
     "casero casera temporada especial plato tabla brasa plancha frito frita picante crujiente " +
+    "otono invierno verano primavera caliente templado " +
     "negro rojo verde blanco"
   ).split(" "),
 );
