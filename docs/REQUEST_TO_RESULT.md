@@ -55,7 +55,8 @@ GET /v2/analysis/compare?a.signal.interests.entities=<RESTAURANT_ID>&b.signal.in
 ```
 
 - **Choice:** the agent picks the rival from step 2: a nearby place with a similar cuisine and price and high affinity.
-- **Used for:** the "Head-to-head" section and the positioning of the menu moves.
+- **What we read:** with one place per side, the response lists each place's own Qloo tags (`results.a`, `results.b`). Tastecraft shows the tags only one of the two carries, compared by name (a "Deli" genre on one side and a "Deli" cuisine on the other count as shared), and drops payment, access and service-option tags. The merged `results.tags[].query.score` is an undocumented sigmoid weight (tags both places share all sit at 0.731), so it only orders the tags and is never shown as a number.
+- **Used for:** the "Head-to-head" section and the positioning of the menu moves. It describes how Qloo characterises each place, not a measured difference between the two audiences.
 
 ## 6. What do locals love that this restaurant doesn't offer? (taste gaps, computed by Tastecraft)
 

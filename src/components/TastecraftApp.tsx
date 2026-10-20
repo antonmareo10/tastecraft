@@ -354,7 +354,7 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         live.tags[ev.family] = ev.tags;
         break;
       case "compare":
-        live.compare = { a: ev.a, b: ev.b, tags: ev.tags };
+        live.compare = { a: ev.a, b: ev.b, only_a: ev.only_a ?? [], only_b: ev.only_b ?? [], shared: ev.shared ?? [] };
         break;
       case "shows":
         live.shows = ev.shows;

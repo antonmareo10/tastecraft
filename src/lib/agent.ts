@@ -45,7 +45,7 @@ How you work:
 2. Build the audience's taste DNA with audience_affinity. Always run "place" (local places the same guests love). Then pick the 3 other domains most useful for the owner's goal (usually artist, brand and one of movie/tv_show/podcast). Call independent tools in parallel.
 3. If the rising_nearby tool is available, once the "place" results are in, run it with the restaurant's entity_id plus the 3-4 highest-affinity local places, to see which of them are gaining or losing popularity. Rising peers are evidence of what is working nearby ("copy what's working nearby"); describe them as aggregate popularity trends over the window, never as the cause of anything.
 4. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
-5. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
+5. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to see what only one of the two places is known for in Qloo (positioning, not a measured audience difference).
 6. Run taste_gaps. It contrasts the ~150 restaurants this crowd loves most in the city with the city's ~150 most popular restaurants, so you can tell what this crowd specifically favours from what is simply popular everywhere: menu terms the crowd favours (lift above 1) or avoids (lift below 1), and cuisines, formats and vibes their favourite places have that this restaurant lacks.
 7. If the nearby_shows tool is available, run it (pass the top artists from the music results; they are only a fallback) and set include_sports when a stadium or arena is likely nearby. It ranks the concerts near the restaurant by fan_match, Qloo's 0-100 affinity of each billed artist for this audience; turn the best-matched ones into pre- or post-event ideas.
 8. Run taste_map to see where in the city people with this taste live and go out.
@@ -507,7 +507,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
   const compareTool = betaZodTool({
     name: "compare_rival",
     description:
-      "Qloo head-to-head analysis between the restaurant's audience (a) and a rival place's audience (b): returns the taste tags that most distinguish them. Use the rival's entity_id from audience_affinity results.",
+      "Qloo head-to-head (/v2/analysis/compare) between the restaurant and a rival place: the Qloo tags (vibe, cuisine, occasion, crowd) only the restaurant carries, only the rival carries, and the ones they share. Tags only, no scores. Use the rival's entity_id from audience_affinity results.",
     inputSchema: z.object({ rival_entity_id: z.string(), rival_name: z.string(), city: z.string() }),
     run: async ({ rival_entity_id, rival_name, city }, ctx) => {
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
@@ -517,17 +517,29 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         return "Error: call find_restaurant first.";
       }
       try {
-        const tags = await compareAudiences({ a: restaurant.entity_id, b: rival_entity_id, city });
+        const h2h = await compareAudiences({ a: restaurant.entity_id, b: rival_entity_id, city });
         ledger.record(rival_name, "compare");
-        for (const t of tags) ledger.record(t.name, "compare", t.score != null ? t.score * 100 : null);
-        if (tags.length) emit({ type: "compare", a: restaurant.name, b: rival_name, tags: tags.slice(0, 10) });
+        for (const t of [...h2h.onlyA, ...h2h.onlyB, ...h2h.shared]) ledger.record(t, "compare");
+        if (h2h.onlyA.length || h2h.onlyB.length) {
+          emit({ type: "compare", a: restaurant.name, b: rival_name, only_a: h2h.onlyA, only_b: h2h.onlyB, shared: h2h.shared });
+        }
         emit({
           type: "tool_end",
           id,
           tool: "compare_rival",
-          summary: tags.length ? `Distinctive: ${tags.slice(0, 3).map((t) => t.name).join(", ")}` : "No comparison data",
+          summary:
+            h2h.onlyA.length || h2h.onlyB.length
+              ? `Only you: ${h2h.onlyA.slice(0, 3).join(", ") || "none"} · only ${rival_name}: ${h2h.onlyB.slice(0, 3).join(", ") || "none"}`
+              : "No comparison data",
         });
-        return JSON.stringify({ restaurant: restaurant.name, rival: rival_name, distinguishing_tags: tags.map((t) => ({ tag: t.name, type: t.type, score: t.score })) });
+        return JSON.stringify({
+          restaurant: restaurant.name,
+          rival: rival_name,
+          how: "Each place's own Qloo tags compared by name. They describe how Qloo characterises each place (positioning), not a measured difference between their audiences, and carry no score.",
+          only_restaurant: h2h.onlyA,
+          only_rival: h2h.onlyB,
+          shared: h2h.shared,
+        });
       } catch (err) {
         emit({ type: "tool_end", id, tool: "compare_rival", summary: short(err), error: true });
         return `Error: ${short(err)}`;

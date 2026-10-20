@@ -72,6 +72,35 @@ describe("findRestaurant", () => {
   });
 });
 
+describe("compareAudiences (head-to-head)", () => {
+  const t = (name: string, subtype: string, score?: number) => ({ tag_id: `urn:x:${name}`, name, subtype, query: score == null ? { count: "1" } : { score } });
+
+  it("shows what only one place carries, compared by name, ordered by Qloo's weight, with no score", async () => {
+    const calls = mockFetch(() => ({
+      results: {
+        // the merged list: shared tags all sit at sigmoid(1) = 0.731, which is what the UI used to print as "73"
+        tags: [t("Lively", "urn:tag:ambience:qloo", 0.99), t("Late night", "urn:tag:ambience:qloo", 0.9), t("Deli", "urn:tag:genre:place", 0.731), t("Bagel Shop", "urn:tag:genre:place", 0.85)],
+        a: [t("Deli", "urn:tag:genre:place:restaurant:deli"), t("Late night", "urn:tag:ambience:qloo"), t("Lively", "urn:tag:ambience:qloo"), t("Visa", "urn:tag:payments:place"), t("Place", "urn:tag:genre:place")],
+        b: [t("Deli", "urn:tag:cuisine:qloo"), t("Bagel Shop", "urn:tag:genre:place:bagel_shop"), t("Breakfast", "urn:tag:dining_options:place")],
+      },
+    }));
+    const { compareAudiences } = await load();
+    const h = await compareAudiences({ a: "A1", b: "B1", city: "New York" });
+    expect(h).toEqual({ onlyA: ["Lively", "Late night"], onlyB: ["Bagel Shop"], shared: ["Deli"] });
+    expect(calls[0].pathname).toBe("/v2/analysis/compare");
+    expect(calls[0].searchParams.get("a.signal.interests.entities")).toBe("A1");
+    expect(calls[0].searchParams.get("b.signal.interests.entities")).toBe("B1");
+  });
+
+  it("keeps cuisine tags that merely start like a generic word", async () => {
+    mockFetch(() => ({ results: { tags: [], a: [t("Barbecue", "urn:tag:genre:place:restaurant:barbecue")], b: [t("Bar", "urn:tag:genre:place:bar")] } }));
+    const { compareAudiences } = await load();
+    const h = await compareAudiences({ a: "A1", b: "B1", city: "Austin" });
+    expect(h.onlyA).toEqual(["Barbecue"]);
+    expect(h.onlyB).toEqual([]); // "Bar" alone says nothing about taste
+  });
+});
+
 describe("tasteGaps", () => {
   type Tag = { name: string; type: string };
   const tag = (name: string, type = "urn:tag:ambience:qloo"): Tag => ({ name, type });

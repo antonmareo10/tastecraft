@@ -197,25 +197,63 @@ export async function audienceDemographics(entityId: string): Promise<Demographi
   return { age: q.age ?? {}, gender: q.gender ?? {} };
 }
 
-// --- 2d. Head-to-head: what distinguishes the restaurant's audience from a rival's
+// Tag names that say nothing about taste (shared by the head-to-head and the taste gaps).
+const GENERIC_TAG = /^(restaurant|food|bar|place|point of interest|establishment|dine[- ]?in|takeout|delivery|good for|accepts|wheelchair|reservations|wi-?fi|parking|credit cards?|debit cards?|serves|price|casual|lunch|dinner|open)\b/i;
 
-export type CompareTag = { name: string; score?: number; type?: string };
+// --- 2d. Head-to-head: what only the restaurant, or only its rival, is known for ---------
+// With one place on each side, /v2/analysis/compare returns each place's own Qloo tags
+// (results.a, results.b) plus a merged list (results.tags) whose query.score is an undocumented
+// sigmoid weight: tags both places share all sit at sigmoid(1) = 0.731. That weight is not a
+// measured difference between two audiences, so it is used only to order tags, never shown.
 
-export async function compareAudiences(opts: { a: string; b: string; city: string }): Promise<CompareTag[]> {
-  const json = await qlooGet<{ results?: { tags?: Array<{ name?: string; tag_id?: string; subtype?: string; query?: { score?: number } }> } }>(
+type RawCompareTag = { tag_id?: string; name?: string; subtype?: string; query?: { score?: number } };
+
+export type HeadToHead = { onlyA: string[]; onlyB: string[]; shared: string[] };
+
+export async function compareAudiences(opts: { a: string; b: string; city: string }): Promise<HeadToHead> {
+  const json = await qlooGet<{ results?: { tags?: RawCompareTag[]; a?: RawCompareTag[]; b?: RawCompareTag[] } }>(
     "/v2/analysis/compare",
     {
       "a.signal.interests.entities": opts.a,
       "b.signal.interests.entities": opts.b,
       "filter.location.query": opts.city,
-      take: 20,
+      take: 50,
     },
   );
-  return (json.results?.tags ?? []).map((t) => ({
-    name: String(t.name ?? t.tag_id ?? ""),
-    score: typeof t.query?.score === "number" ? t.query.score : undefined,
-    type: t.subtype,
-  }));
+  return headToHead(json.results ?? {});
+}
+
+const COMPARE_SKIP_TYPE = /^urn:tag:(payments|credit_card|parking|accessibility|inclusivity|service_type|dining_options|offerings|seating|amenity|children|planning|health|nutrition)(:|$)|^urn:tag:genre:place$/;
+
+/** Name-level set difference of the two places' tags (a "Deli" genre on one side and a "Deli" cuisine on the other count as shared). */
+export function headToHead(r: { tags?: RawCompareTag[]; a?: RawCompareTag[]; b?: RawCompareTag[] }, max = 8): HeadToHead {
+  const weight = new Map<string, number>();
+  for (const t of r.tags ?? []) {
+    const k = plain(t.name ?? "");
+    if (k && typeof t.query?.score === "number") weight.set(k, Math.max(weight.get(k) ?? 0, t.query.score));
+  }
+  const keep = (t: RawCompareTag) => {
+    const name = (t.name ?? "").trim();
+    return Boolean(name) && !GENERIC_TAG.test(name) && !COMPARE_SKIP_TYPE.test(String(t.subtype ?? ""));
+  };
+  const names = (side: RawCompareTag[] | undefined) => {
+    const out = new Map<string, string>();
+    for (const t of side ?? []) if (keep(t) && !out.has(plain(t.name ?? ""))) out.set(plain(t.name ?? ""), (t.name ?? "").trim());
+    return out;
+  };
+  const a = names(r.a);
+  const b = names(r.b);
+  const byWeight = (keys: string[], from: Map<string, string>) =>
+    keys
+      .map((k, i) => ({ k, i, w: weight.get(k) ?? 0 }))
+      .sort((x, y) => y.w - x.w || x.i - y.i)
+      .slice(0, max)
+      .map(({ k }) => from.get(k) as string);
+  return {
+    onlyA: byWeight([...a.keys()].filter((k) => !b.has(k)), a),
+    onlyB: byWeight([...b.keys()].filter((k) => !a.has(k)), b),
+    shared: byWeight([...a.keys()].filter((k) => b.has(k)), a),
+  };
 }
 
 // --- 3. Crowd vs city: the restaurant sets behind taste gaps and crowd lift ----------
@@ -278,7 +316,6 @@ export function menuSets(data: CrowdData): CrowdSets {
 // Tags (cuisines, formats, vibes) that the crowd's favourite restaurants carry much more often
 // than the city's most popular ones (lift), minus the tags this restaurant already has.
 
-const GENERIC_TAG = /^(restaurant|food|bar|place|point of interest|establishment|dine[- ]?in|takeout|delivery|good for|accepts|wheelchair|reservations|wi-?fi|parking|credit cards?|debit cards?|serves|price|casual|lunch|dinner|open)/i;
 // Tag families that describe payment, access or location rather than taste.
 const NON_TASTE_TYPE = /^urn:tag:(payments|credit_card|parking|accessibility|age_range|nearby_attraction|neighborhood_characteristic|view)(:|$)|^urn:tag:genre:place$/;
 

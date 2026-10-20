@@ -122,7 +122,8 @@ export type AgentEvent =
   | { type: "heatmap"; cells: HeatCell[]; zones: Zone[]; center: [number, number] }
   | { type: "restaurant"; entity: EntityRef & { lat?: number; lon?: number }; resolution?: Resolution }
   | { type: "baseline"; text: string }
-  | { type: "compare"; a: string; b: string; tags: { name: string; score?: number }[] }
+  // Head-to-head with a rival (Qloo /v2/analysis/compare): tags only one of the two places carries.
+  | { type: "compare"; a: string; b: string; only_a: string[]; only_b: string[]; shared: string[] }
   | { type: "shows"; shows: ShowRef[] }
   | { type: "trends"; series: TrendLine[] }
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }

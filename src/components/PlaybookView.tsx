@@ -66,7 +66,7 @@ export type LiveState = {
   baseline?: string;
   playbook?: Playbook;
   demographics?: { age: Record<string, number>; gender: Record<string, number> };
-  compare?: { a: string; b: string; tags: { name: string; score?: number }[] };
+  compare?: { a: string; b: string; only_a: string[]; only_b: string[]; shared: string[] };
   shows?: ShowRef[];
   trends?: TrendLine[];
   draft?: Record<string, unknown>;
@@ -262,19 +262,38 @@ export default function PlaybookView({
         </Section>
       )}
 
-      {live.compare && live.compare.tags.length > 0 && (
-        <Section icon={<IconGap size={16} />} kicker="Head-to-head" title={`What sets your crowd apart from ${live.compare.b}`}>
+      {live.compare && (live.compare.only_a.length > 0 || live.compare.only_b.length > 0) && (
+        <Section icon={<IconGap size={16} />} kicker="Head-to-head" title={`What sets you apart from ${live.compare.b}`}>
           <p className="mb-3 text-[13px] text-ink-2">
-            Qloo’s comparison of the two audiences: the taste signals that most distinguish {live.compare.a}’s guests from {live.compare.b}’s.
+            Qloo’s head-to-head of the two places: what Qloo knows only one of you for (vibe, cuisine, occasion, crowd). It describes how
+            each place is positioned, not a measured difference between the two audiences.
           </p>
-          <ul className="flex flex-wrap gap-2">
-            {live.compare.tags.map((t) => (
-              <li key={t.name} className="inline-flex items-center gap-2 rounded-full border border-line bg-paper/60 px-3 py-1 text-sm">
-                {t.name}
-                {typeof t.score === "number" && <span className="text-[11px] tabular-nums text-muted">{Math.round(t.score * 100)}</span>}
-              </li>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                [`Only ${live.compare.a}`, live.compare.only_a, "border-olive/30 bg-olive/5"],
+                [`Only ${live.compare.b}`, live.compare.only_b, "border-line bg-paper/60"],
+              ] as const
+            ).map(([label, tags, tone]) => (
+              <div key={label}>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
+                {tags.length ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {tags.map((t) => (
+                      <li key={t} className={`rounded-full border px-3 py-1 text-sm ${tone}`}>
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted">Nothing Qloo tags only here.</p>
+                )}
+              </div>
             ))}
-          </ul>
+          </div>
+          {live.compare.shared.length > 0 && (
+            <p className="mt-3 text-[12px] text-muted">Both: {live.compare.shared.slice(0, 6).join(" · ")}</p>
+          )}
         </Section>
       )}
 
