@@ -334,7 +334,10 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         if (step) {
           step.done = true;
           step.error = ev.error;
-          step.summary = ev.summary;
+          step.summary =
+            ev.tool === "taste_map" && ev.summary?.startsWith("Hotspots: ")
+              ? `Hotspots: ${[...new Set(ev.summary.slice(10).split(", "))].join(", ")}`
+              : ev.summary;
           step.entities = ev.entities;
         }
         if (ev.domain && ev.entities?.length && !ev.error) {
@@ -347,7 +350,8 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         live.resolution = ev.resolution;
         break;
       case "heatmap":
-        live.heatmap = { cells: ev.cells, zones: ev.zones, center: ev.center };
+        // Older recordings can name the same neighbourhood twice: keep the strongest one per name.
+        live.heatmap = { cells: ev.cells, zones: ev.zones.filter((z, i, all) => all.findIndex((x) => x.label === z.label) === i), center: ev.center };
         break;
       case "baseline":
         live.baseline = ev.text;

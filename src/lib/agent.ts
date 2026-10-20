@@ -675,7 +675,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
                 : (match.note ?? "No matched concerts nearby")
               : shows.length
                 ? `${shows.length} upcoming shows (keyword search) · next: ${shows[0].artist}, ${shows[0].date}`
-                : "No upcoming shows nearby",
+                : (match.note ?? "No upcoming shows nearby"),
         });
         return JSON.stringify({
           strategy: match.strategy,
