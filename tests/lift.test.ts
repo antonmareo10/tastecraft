@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  crowdLiftOf,
   dishHead,
   dishTerms,
   foodTokens,
@@ -110,6 +111,24 @@ describe("planLift", () => {
 
   it("returns no score when nothing matches", () => {
     expect(planLift(["Kale Smoothie"], sets).lift).toBeNull();
+  });
+});
+
+describe("crowdLiftOf", () => {
+  const sets = {
+    crowd: [place("C1", "Hot pastrami"), place("C2", "Pastrami sandwich"), place("C3", "Pastrami"), place("C4", "Fries")],
+    city: [place("T1", "Pastrami"), place("T2", "Fries"), place("T3", "Fries"), place("T4", "Fries")],
+  };
+
+  it("builds the playbook block for the plan and, on the same sets, the no-Qloo baseline", () => {
+    const { perDish, summary } = crowdLiftOf(["Pastrami Melt", "Kale Smoothie"], sets, "New York", ["Loaded Fries"]);
+    expect(perDish.map((d) => d.lift)).toEqual([2, null]);
+    expect(summary).toMatchObject({ score: 2, matched: 1, total: 2, crowd_n: 4, city_n: 4, city: "New York" });
+    expect(summary.baseline).toMatchObject({ score: 0.5, matched: 1, total: 1 }); // fries: crowd 1/4, city 3/4 -> (2/6)/(4/6)
+  });
+
+  it("leaves the baseline out when there are no baseline dishes", () => {
+    expect(crowdLiftOf(["Pastrami Melt"], sets, "New York").summary.baseline).toBeUndefined();
   });
 });
 

@@ -66,7 +66,7 @@ const handler = createMcpHandler(
       {
         title: "Full taste playbook",
         description:
-          "Runs the Tastecraft agent (Qloo + Claude, ~1 minute): menu moves with verified evidence, an event, local marketing, a supplier shopping list and a 7-day launch plan. Rate-limited.",
+          "Runs the Tastecraft agent (Qloo + Claude, about 2 minutes): menu moves with verified evidence, an event, local marketing, a supplier shopping list and a 7-day launch plan. Rate-limited.",
         inputSchema: z.object({
           restaurant: z.string().min(2).max(80),
           city: z.string().min(2).max(60),

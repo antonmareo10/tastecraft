@@ -48,6 +48,11 @@ export default function About() {
           Claude agent turns that into three dishes to test, an event, a ready-to-post campaign aimed at the right
           neighborhoods, a supplier shopping list and a 7-day launch plan.
         </p>
+        <p>
+          Every playbook carries a <strong>crowd lift</strong>: Qloo compares the restaurants this crowd loves most with the
+          city’s most popular ones, and Tastecraft measures how much more often the crowd’s favourite places serve the
+          proposed dishes. The same score is shown for the same model’s answer without Qloo, side by side.
+        </p>
       </Block>
 
       <Block title="Responsible by design">
@@ -95,8 +100,8 @@ export default function About() {
           </li>
           <li>
             <strong>Distribution:</strong> restaurant software marketplaces (POS and reservations), food distributors who
-            benefit from the shopping list turning into orders, and Supplora — the founder’s AI purchasing tool already in
-            daily use by a restaurant in Spain.
+            benefit from the shopping list turning into orders, and Supplora — the founder’s AI purchasing tool, used by a
+            family-run restaurant in Spain.
           </li>
           <li>
             <strong>Expansion:</strong> connect sales data to close the loop (did the new dish sell?), multi-location

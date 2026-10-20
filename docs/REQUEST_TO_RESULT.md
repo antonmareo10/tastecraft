@@ -86,7 +86,7 @@ GET /v2/insights?filter.type=urn:heatmap&signal.interests.entities=<RESTAURANT_I
 | Situation | What happens |
 |---|---|
 | Key missing or rejected (`QLOO_CONFIG`, `QLOO_AUTH`) | The run stops immediately with a plain message. No playbook is produced without data. |
-| Rate limit (`QLOO_RATE_LIMIT`) | One retry if Qloo asks to wait 5 s or less; otherwise a clear "wait a minute" message. |
+| Rate limit (`QLOO_RATE_LIMIT`) | At most 4 Qloo requests in flight; a 429 is retried up to 3 attempts in total (honouring `retry-after`, capped at 10 s), like Qloo's official client; then a clear "wait a minute" message. |
 | Timeout, network error or 5xx | One retry, then the gap is reported in the playbook's caveats. |
 | Empty result | Reported as "No results"; the agent works with what it has and says so in caveats. |
 

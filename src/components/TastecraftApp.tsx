@@ -218,6 +218,11 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-[12px] text-muted">
+              {demos.length
+                ? "Replays are recorded real runs, sped up. A live run reads Qloo for about 2 minutes."
+                : "A live run reads Qloo for about 2 minutes."}
+            </p>
           </form>
         </section>
 
