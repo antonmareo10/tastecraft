@@ -363,6 +363,16 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           ledger.record(t.term, "taste_gaps", t.lift);
         }
         for (const e of sampled) ledger.record(e.name, "taste_gaps", e.affinity != null ? e.affinity * 100 : null, { affinity: true });
+        if (!lens && (menu.over.length || menu.under.length)) {
+          emit({
+            type: "crowd_menu",
+            city: input.city,
+            crowd_n,
+            city_n,
+            favours: menu.over.map(({ term, crowd, city, lift }) => ({ term, crowd, city, lift })),
+            avoids: menu.under,
+          });
+        }
         const pct = (x: number, n: number) => (n ? Math.round((x / n) * 100) : 0);
         const fav = menu.over.slice(0, 3).map((t) => `${t.term} ×${t.lift.toFixed(1)}`);
         emit({

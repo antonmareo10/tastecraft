@@ -128,6 +128,9 @@ export type AgentEvent =
   | { type: "trends"; series: TrendLine[] }
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
+  // Menu terms this crowd's favourite restaurants carry far more (favours) or less (avoids) often
+  // than the city's most popular ones (see src/lib/lift.ts).
+  | { type: "crowd_menu"; city: string; crowd_n: number; city_n: number; favours: TermLift[]; avoids: TermLift[] }
   | { type: "playbook"; playbook: Playbook }
   | { type: "playbook_draft"; draft: Record<string, unknown> }
   | { type: "answer"; question: string; answer: string; evidence: Evidence[] }

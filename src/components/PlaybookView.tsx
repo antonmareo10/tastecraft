@@ -71,6 +71,7 @@ export type LiveState = {
   trends?: TrendLine[];
   draft?: Record<string, unknown>;
   tags: Partial<Record<"dishes" | "cuisines" | "ambience", { name: string; affinity?: number }[]>>;
+  crowdMenu?: { city: string; crowd_n: number; city_n: number; favours: TermLift[]; avoids: TermLift[] };
 };
 
 export type Alternative = Resolution["alternatives"][number];
@@ -211,30 +212,66 @@ export default function PlaybookView({
 
       {!p && live.draft && <DraftPreview draft={live.draft} />}
 
-      {(live.demographics || Object.keys(live.tags).length > 0) && (
+      {(live.demographics || live.crowdMenu || Object.keys(live.tags).length > 0) && (
         <Section icon={<IconPlate size={16} />} kicker="Cravings & crowd" title="What they crave, and who they are">
           <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
             <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-              {(["dishes", "cuisines", "ambience"] as const).map((fam) =>
-                live.tags[fam]?.length ? (
-                  <div key={fam} className="rounded-xl border border-line bg-paper/50 p-4">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                      {{ dishes: "Dishes", cuisines: "Cuisines", ambience: "Vibe" }[fam]}
+              {live.crowdMenu && live.crowdMenu.favours.length > 0 && (
+                <div className="rounded-xl border border-olive/25 bg-olive/5 p-4" title={LIFT_HELP}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">On your crowd’s menus</p>
+                  <p className="mb-2 text-[11px] leading-snug text-muted">
+                    vs {live.crowdMenu.city}’s {live.crowdMenu.city_n} most popular restaurants
+                  </p>
+                  <ul className="space-y-1.5">
+                    {live.crowdMenu.favours.slice(0, 6).map((t) => (
+                      <li key={t.term} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 text-sm leading-snug">{t.term}</span>
+                        <span
+                          className="shrink-0 text-[11px] font-semibold tabular-nums text-olive"
+                          title={`On ${t.crowd} of the ${live.crowdMenu!.crowd_n} restaurants your guests love most vs ${t.city} of ${live.crowdMenu!.city_n}`}
+                        >
+                          {liftLabel(t.lift)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {live.crowdMenu.avoids.length > 0 && (
+                    <p className="mt-2 text-[11px] leading-snug text-muted">
+                      Rarer with your crowd: {live.crowdMenu.avoids.slice(0, 4).map((t) => t.term).join(" · ")}
                     </p>
-                    <ul className="space-y-1.5">
-                      {live.tags[fam]!.slice(0, 6).map((t) => (
-                        <li key={t.name} className="flex items-center justify-between gap-2">
-                          <span className="min-w-0 text-sm leading-snug">{t.name}</span>
-                          <AffinityBar value={t.affinity} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null,
+                  )}
+                </div>
               )}
+              {(["dishes", "cuisines", "ambience"] as const)
+                .filter((fam) => !(fam === "dishes" && live.crowdMenu?.favours.length))
+                .map((fam) =>
+                  live.tags[fam]?.length ? (
+                    <div key={fam} className="rounded-xl border border-line bg-paper/50 p-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                        {{ dishes: "Dishes", cuisines: "Cuisines", ambience: "Vibe" }[fam]}
+                      </p>
+                      <ol className="space-y-1.5">
+                        {live.tags[fam]!.slice(0, 6).map((t, i) => (
+                          <li
+                            key={t.name}
+                            className="flex items-baseline gap-2 text-sm leading-snug"
+                            title={typeof t.affinity === "number" ? `Qloo affinity ${Math.round(t.affinity * 1000) / 10}/100` : undefined}
+                          >
+                            <span className="w-4 shrink-0 text-right text-[11px] tabular-nums text-muted">{i + 1}</span>
+                            <span className="min-w-0">{t.name}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null,
+                )}
             </div>
             {live.demographics && <Demographics data={live.demographics} />}
           </div>
+          <p className="mt-3 text-[11px] leading-snug text-muted">
+            Qloo’s tag affinity puts what is popular everywhere near 100 for almost any audience, so cuisines and vibe are shown in Qloo’s
+            order; the menu column compares this crowd with the city to show what is specific to it.
+          </p>
         </Section>
       )}
 
