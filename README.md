@@ -13,7 +13,7 @@
 4. **Generic AI vs. Tastecraft** scores both answers with the same formula. **Cravings** shows what is specific to this crowd ("On your crowd's menus" vs the city), and **Head-to-head** shows what only this restaurant, or only its closest rival, is known for.
 5. Want it live? Type any restaurant and city. A live run takes about **2 minutes** (median 128 s over 5 runs, 102–178 s) and live runs are capped per day; replays are always instant.
 
-The numbers behind the claim are in **[eval/SUMMARY.md](eval/SUMMARY.md)**: on 8 restaurants in 8 cities, the same model's dishes score **×0.91** crowd lift on their own, **×1.02** when given Qloo affinity data, and **×2.44** with Tastecraft's crowd-vs-city contrast (better than the model alone in 7 of 8); recorded full-agent playbooks score **×3.07** vs **×0.90** for their own no-Qloo answers (n = 3).
+The numbers behind the claim are in **[eval/SUMMARY.md](eval/SUMMARY.md)**: on 8 restaurants in 8 cities, the same model's dishes score **×0.91** crowd lift on their own, **×1.02** when given Qloo affinity data, and **×2.44** with Tastecraft's crowd-vs-city contrast (better than the model alone in 7 of 8); recorded full-agent playbooks score **×2.95** vs **×0.88** for their own no-Qloo answers (n = 3).
 
 ## How this maps to the judging criteria
 

@@ -17,8 +17,8 @@ Every arm is scored by the same function against the same two sets. All arms use
 
 | Restaurant | Crowd / city restaurants with menu data | LLM only | + Qloo affinity | + Qloo crowd vs city | Full agent |
 |---|---|---|---|---|---|
-| Katz's Delicatessen, New York | 143 / 128 | ×0.57 (3/3) | ×0.88 (3/3) | ×2.33 (3/3) | ×2.32 (3/3) |
-| Gjelina, Los Angeles | 145 / 139 | ×0.93 (3/3) | ×1.70 (3/3) | ×4.82 (3/3) | ×3.95 (3/3) |
+| Katz's Delicatessen, New York | 143 / 128 | ×0.57 (3/3) | ×0.88 (3/3) | ×2.33 (3/3) | ×2.94 (3/3) |
+| Gjelina, Los Angeles | 145 / 139 | ×0.93 (3/3) | ×1.70 (3/3) | ×4.82 (3/3) | ×2.75 (3/3) |
 | Casa Lucio, Madrid | 147 / 147 | ×0.85 (3/3) | ×0.47 (3/3) | ×3.81 (3/3) | ×3.16 (3/3) |
 | Au Cheval, Chicago | 150 / 141 | ×0.78 (3/3) | ×1.10 (3/3) | ×2.04 (3/3) | — |
 | Franklin Barbecue, Austin | 149 / 135 | ×0.56 (3/3) | ×1.04 (3/3) | ×1.49 (3/3) | — |
@@ -35,7 +35,7 @@ Every arm is scored by the same function against the same two sets. All arms use
 | Restaurants where it beats LLM only | — | 5 / 8 | 7 / 8 |
 | Dishes matched on local menus | 24 / 24 | 24 / 24 | 24 / 24 |
 
-Full agent (recorded playbooks, n = 3): geometric mean ×3.07; the same runs' own no-Qloo baselines: ×0.90. Recorded run times: 178 s, 102 s, 119 s.
+Full agent (recorded playbooks, n = 3): geometric mean ×2.95; the same runs' own no-Qloo baselines: ×0.88. Recorded run times: 107 s, 98 s, 119 s.
 
 ## Why the old Taste-Fit score could not tell plans apart
 
