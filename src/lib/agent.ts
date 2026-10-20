@@ -59,7 +59,7 @@ Rules for the playbook:
 - Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
-- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Use taste_gaps to see what this crowd favours over the city (lift above 1) or avoids (below 1), and weigh it together with the restaurant's identity and kitchen: a good menu move is something this restaurant can credibly serve that its crowd over-indexes on, not a copy of another place's menu. When you use these shares, quote them in the evidence ("on 11% of the menus at your guests' favourite places vs 2% citywide").
+- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Use taste_gaps to see what this crowd favours over the city (lift above 1) or avoids (below 1), and weigh it together with the restaurant's identity and kitchen: a good menu move is something this restaurant can credibly serve that its crowd over-indexes on, not a copy of another place's menu. When you use these shares, quote them in the evidence, e.g. on 11% of the menus at your guests' favourite places vs 2% citywide.
 - Give each dish a plain, descriptive menu name.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
@@ -693,8 +693,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     },
   });
 
-  const publishTool = {
-    ...betaZodTool({
+  const publishBase = betaZodTool({
     name: "publish_playbook",
     description: "Publish the final taste playbook to the restaurant owner. Call exactly once, at the end.",
     inputSchema: PlaybookSchema,
@@ -717,10 +716,10 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
       emit({ type: "tool_end", id, tool: "publish_playbook", summary: "Playbook ready" });
       return "Published.";
     },
-    }),
-    // Stream the playbook as it is written so the UI can draft it live.
-    eager_input_streaming: true,
-  };
+  });
+  // Stream the playbook as it is written so the UI can draft it live. With eager streaming the API
+  // does not validate the tool JSON, so a malformed draft gets one retry with publishBase (validated).
+  const publishTool = { ...publishBase, eager_input_streaming: true };
 
   const answerTool = betaZodTool({
     name: "answer_owner",
@@ -755,6 +754,24 @@ Answer language: ${req.language ?? "English"}
 Owner's question: ${fu.question}`
     : null;
 
+  function toolsWith(publish: typeof publishTool | typeof publishBase) {
+    return fu
+      ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, ...(PLACE_TRENDS ? [risingTool] : []), answerTool]
+      : [
+          findTool,
+          affinityTool,
+          tagsTool,
+          profileTool,
+          compareTool,
+          gapsTool,
+          mapTool,
+          ...(PLACE_TRENDS ? [risingTool] : []),
+          ...(showsConfigured() ? [showsTool] : []),
+          publish,
+        ];
+  }
+  const runSignal = signal ? AbortSignal.any([signal, stopper.signal]) : stopper.signal;
+
   const runner = client.beta.messages.toolRunner(
     {
       model: MODEL,
@@ -767,30 +784,19 @@ Owner's question: ${fu.question}`
       betas: ["server-side-fallback-2026-07-01", "thinking-display-updates-2026-08-18"],
       fallbacks: "default",
       stream: true,
-      tools: fu
-        ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, ...(PLACE_TRENDS ? [risingTool] : []), answerTool]
-        : [
-            findTool,
-            affinityTool,
-            tagsTool,
-            profileTool,
-            compareTool,
-            gapsTool,
-            mapTool,
-            ...(PLACE_TRENDS ? [risingTool] : []),
-            ...(showsConfigured() ? [showsTool] : []),
-            publishTool,
-          ],
+      tools: toolsWith(publishTool),
       messages: [{ role: "user", content: followupMessage ?? userMessage }],
     },
-    { signal: signal ? AbortSignal.any([signal, stopper.signal]) : stopper.signal },
+    { signal: runSignal },
   );
 
   let lastDraftAt = 0;
   let draftId: string | null = null;
   const usage = { input: 0, cache_write: 0, cache_read: 0, output: 0, turns: 0 };
-  try {
-    for await (const stream of runner) {
+  let refused = false;
+
+  async function drive(r: typeof runner): Promise<void> {
+    for await (const stream of r) {
       stream.on("streamEvent", (event, snapshot) => {
         if (event.type !== "content_block_delta" || event.delta.type !== "input_json_delta") return;
         const block = snapshot.content[event.index];
@@ -802,7 +808,13 @@ Owner's question: ${fu.question}`
         const now = Date.now();
         if (now - lastDraftAt < 700) return;
         lastDraftAt = now;
-        emit({ type: "playbook_draft", draft: (block.input ?? {}) as Record<string, unknown> });
+        let draft: Record<string, unknown>;
+        try {
+          draft = (block.input ?? {}) as Record<string, unknown>; // lazily parsed partial JSON; may be malformed
+        } catch {
+          return;
+        }
+        emit({ type: "playbook_draft", draft });
       });
       const message = await stream.finalMessage();
       usage.turns += 1;
@@ -819,9 +831,28 @@ Owner's question: ${fu.question}`
         if (block.type === "thinking" && block.thinking.trim()) emit({ type: "note", text: block.thinking.trim() });
       }
       if (message.stop_reason === "refusal") {
+        refused = true;
         emit({ type: "error", message: "The model declined this request. Try another restaurant." });
         return;
       }
+    }
+  }
+
+  const malformedToolJson = (err: unknown) =>
+    err instanceof SyntaxError || (err instanceof Anthropic.AnthropicError && /parse tool parameter JSON/i.test(err.message));
+
+  try {
+    try {
+      await drive(runner);
+    } catch (err) {
+      if (fatal || published || fu || !malformedToolJson(err)) throw err;
+      // The streamed playbook JSON was malformed (eager streaming skips server-side validation).
+      // Ask once more from the same conversation, with a validated publish tool.
+      if (draftId) emit({ type: "tool_end", id: draftId, tool: "draft_playbook", summary: "Draft was malformed; rewriting", error: true });
+      draftId = null;
+      console.warn("[tastecraft] malformed playbook JSON; retrying the final step once");
+      emit({ type: "note", text: "The first draft of the playbook came back malformed, so the agent is writing it again." });
+      await drive(client.beta.messages.toolRunner({ ...runner.params, max_iterations: 3, tools: toolsWith(publishBase) }, { signal: runSignal }));
     }
   } catch (err) {
     if (fatal) {
@@ -833,6 +864,7 @@ Owner's question: ${fu.question}`
     // Token accounting for budget tracking (counts only: no content, no keys).
     console.info(`[tastecraft] ${fu ? "followup" : "playbook"} usage ${MODEL}: ${JSON.stringify(usage)}`);
   }
+  if (refused) return;
   if (fatal && !published) {
     emit({ type: "error", message: fatal });
     return;
