@@ -13,6 +13,7 @@
     "prebuild": "node scripts/ensure-demos.mjs",
     "record-demo": "node scripts/record-demo.mjs",
     "pack-demos": "node scripts/pack-demos.mjs",
+    "rescore-demos": "vite-node scripts/rescore-demos.ts",
     "test": "vitest run",
     "benchmark": "vite-node scripts/benchmark.ts",
     "eval:judge": "node scripts/eval.mjs"

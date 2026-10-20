@@ -13,6 +13,12 @@ import {
 } from "@/lib/lift";
 
 const place = (name: string, ...menu: string[]): MenuPlace => ({ name, menu });
+// Menu counts for dishTerms, from places (each listed place counts once per term).
+const menusOf = (places: MenuPlace[]) => {
+  const idx = indexMenus(places);
+  return (key: string) => idx.get(key)?.count ?? 0;
+};
+const times = (n: number, p: MenuPlace) => Array.from({ length: n }, (_, i) => ({ ...p, name: `${p.name}${i}` }));
 
 describe("tokens", () => {
   it("folds accents and case, drops stopwords and folds plurals", () => {
@@ -38,10 +44,7 @@ describe("tokens", () => {
 });
 
 describe("dishTerms", () => {
-  const vocab = indexMenus([
-    place("A", "Matzo Ball Soup", "Dumplings", "Fried chicken"),
-    place("B", "Hot pastrami", "Black and white cookie"),
-  ]);
+  const vocab = menusOf([...times(3, place("A", "Matzo Ball Soup", "Dumplings", "Fried chicken")), place("B", "Hot pastrami", "Black and white cookie")]);
 
   it("prefers the longest term local menus use, then fills in the rest", () => {
     expect(dishTerms("Matzo Ball Soup Dumplings", vocab).map((t) => t.label)).toEqual(["Matzo Ball Soup", "Dumplings"]);
@@ -56,8 +59,13 @@ describe("dishTerms", () => {
     expect(dishTerms("Fried Chicken Sandwich", vocab).map((t) => t.key)).toEqual(["fried chicken"]);
   });
 
+  it("needs a phrase on at least 3 menus before preferring it to its words", () => {
+    const v = menusOf([place("A", "Fried mozzarella sticks"), ...times(7, place("B", "Mozzarella sticks"))]);
+    expect(dishTerms("Fried Mozzarella Sticks with Russian Dressing", v).map((t) => t.key)).toEqual(["mozzarella stick"]);
+  });
+
   it("ignores season and temperature words, so a seasonal label does not dilute a dish", () => {
-    const v = indexMenus([place("A", "Cocido madrileño", "Spring rolls", "Otoño menu")]);
+    const v = menusOf(times(3, place("A", "Cocido madrileño", "Spring rolls", "Otoño menu")));
     expect(dishTerms("Cocido madrileño de otoño", v).map((t) => t.key)).toEqual(["cocido madrileno"]);
     expect(dishTerms("Vegetable spring rolls", v).map((t) => t.key)).toEqual(["spring roll"]);
   });

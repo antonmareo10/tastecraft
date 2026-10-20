@@ -13,7 +13,8 @@
 // (specialty dishes, menu highlights) contains it. Its lift is the share of crowd places serving
 // it divided by the share of city places serving it, add-one smoothed so that a term seen in
 // neither set scores x1.0 rather than infinity. A dish is split into the food terms that local
-// menus actually use; its lift is the geometric mean of its terms. A plan's lift is the geometric
+// menus actually use (a multi-word term must appear on at least 3 local menus, otherwise its
+// words are used); its lift is the geometric mean of its terms. A plan's lift is the geometric
 // mean over the dishes that matched at least one term.
 //
 // Everything is computed from Qloo data on the server; the model never writes these numbers.
@@ -64,6 +65,9 @@ const NOT_A_DISH = new Set(
 );
 
 const MAX_GRAM = 3;
+// A phrase seen on one or two menus is too rare to measure ("fried mozzarella sticks" 1 vs 0),
+// so multi-word terms need this many menus across both sets before they beat their own words.
+export const MIN_PHRASE_MENUS = 3;
 const ch = (code: number) => String.fromCharCode(code);
 const range = (from: number, to: number) => `${ch(from)}-${ch(to)}`;
 // Latin letters incl. accented ones (Latin-1 Supplement + Latin Extended-A/B), digits.
@@ -137,10 +141,11 @@ export function smoothedLift(a: number, nA: number, b: number, nB: number): numb
 
 /**
  * The food terms of a dish that local menus actually use: longest-first, non-overlapping n-grams
- * (up to 3 words) of the dish head that appear in the vocabulary. Single words in NOT_A_DISH are
+ * (up to 3 words) of the dish head. `menus(key)` is how many local menus (both sets) mention the
+ * term: a single word needs one, a phrase needs MIN_PHRASE_MENUS. Single words in NOT_A_DISH are
  * skipped, and so is any n-gram made only of such words.
  */
-export function dishTerms(dish: string, vocab: { has(key: string): boolean }): { key: string; label: string }[] {
+export function dishTerms(dish: string, menus: (key: string) => number): { key: string; label: string }[] {
   const head = dishHead(dish).normalize("NFC");
   const toks = foodTokens(head);
   const used = new Array<boolean>(toks.length).fill(false);
@@ -151,7 +156,7 @@ export function dishTerms(dish: string, vocab: { has(key: string): boolean }): {
       const span = toks.slice(i, i + n);
       if (span.every((t) => NOT_A_DISH.has(t.key))) continue;
       const key = span.map((t) => t.key).join(" ");
-      if (!vocab.has(key)) continue;
+      if (menus(key) < (n > 1 ? MIN_PHRASE_MENUS : 1)) continue;
       for (let k = i; k < i + n; k++) used[k] = true;
       picked.push({ key, label: head.slice(span[0].start, span[span.length - 1].end), at: i });
     }
@@ -168,9 +173,9 @@ export function planLift(dishes: string[], sets: CrowdSets): PlanLift {
   const cityIdx = indexMenus(sets.city);
   const nA = sets.crowd.length;
   const nB = sets.city.length;
-  const vocab = { has: (k: string) => crowdIdx.has(k) || cityIdx.has(k) };
+  const menus = (k: string) => (crowdIdx.get(k)?.count ?? 0) + (cityIdx.get(k)?.count ?? 0);
   const out: DishLift[] = dishes.map((dish) => {
-    const terms = dishTerms(dish, vocab).map(({ key, label }) => {
+    const terms = dishTerms(dish, menus).map(({ key, label }) => {
       const a = crowdIdx.get(key)?.count ?? 0;
       const b = cityIdx.get(key)?.count ?? 0;
       return { term: label, crowd: a, city: b, lift: round2(smoothedLift(a, nA, b, nB)) };
@@ -186,6 +191,33 @@ export function planLift(dishes: string[], sets: CrowdSets): PlanLift {
     total: dishes.length,
     crowd_n: nA,
     city_n: nB,
+  };
+}
+
+/** The playbook's crowd-lift block: the plan's dishes and, when given, the no-Qloo baseline's, on the same sets. */
+export function crowdLiftOf(dishes: string[], sets: CrowdSets, city: string, baselineDishes: string[] = []) {
+  const plan = planLift(dishes, sets);
+  const baseline = baselineDishes.length ? planLift(baselineDishes, sets) : null;
+  return {
+    perDish: plan.dishes,
+    summary: {
+      score: plan.lift,
+      matched: plan.matched,
+      total: plan.total,
+      crowd_n: plan.crowd_n,
+      city_n: plan.city_n,
+      city,
+      ...(baseline
+        ? {
+            baseline: {
+              score: baseline.lift,
+              matched: baseline.matched,
+              total: baseline.total,
+              dishes: baseline.dishes.map((d) => ({ dish: d.dish, lift: d.lift, terms: d.terms })),
+            },
+          }
+        : {}),
+    },
   };
 }
 

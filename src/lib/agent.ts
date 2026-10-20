@@ -6,7 +6,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { matchConcerts } from "./concerts";
 import { EvidenceLedger } from "./ledger";
-import { parseBaselineDishes, planLift } from "./lift";
+import { crowdLiftOf, parseBaselineDishes } from "./lift";
 import { QlooError } from "./qloo";
 import type { HarnessError } from "./qloo-harness";
 import {
@@ -899,36 +899,20 @@ async function crowdLiftFor(
   try {
     const sets = menuSets(await crowdAndCity({ entityId, city }));
     if (!sets.crowd.length || !sets.city.length) return undefined;
-    const plan = planLift(
-      pb.menu_moves.map((m) => m.dish),
-      sets,
-    );
-    pb.menu_moves.forEach((m, i) => {
-      m.lift = plan.dishes[i]?.lift ?? null;
-      m.lift_terms = plan.dishes[i]?.terms ?? [];
-    });
-    const result: CrowdLift = {
-      score: plan.lift,
-      matched: plan.matched,
-      total: plan.total,
-      crowd_n: plan.crowd_n,
-      city_n: plan.city_n,
-      city,
-    };
     const text = baseline
       ? await Promise.race([baseline.catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000))])
       : null;
-    const dishes = text ? parseBaselineDishes(text) : [];
-    if (dishes.length) {
-      const b = planLift(dishes, sets);
-      result.baseline = {
-        score: b.lift,
-        matched: b.matched,
-        total: b.total,
-        dishes: b.dishes.map((d) => ({ dish: d.dish, lift: d.lift, terms: d.terms })),
-      };
-    }
-    return result;
+    const { perDish, summary } = crowdLiftOf(
+      pb.menu_moves.map((m) => m.dish),
+      sets,
+      city,
+      text ? parseBaselineDishes(text) : [],
+    );
+    pb.menu_moves.forEach((m, i) => {
+      m.lift = perDish[i]?.lift ?? null;
+      m.lift_terms = perDish[i]?.terms ?? [];
+    });
+    return summary satisfies CrowdLift;
   } catch (err) {
     console.warn(`[tastecraft] crowd lift unavailable: ${shortMessage(err)}`);
     return undefined;

@@ -17,25 +17,25 @@ Every arm is scored by the same function against the same two sets. All arms use
 
 | Restaurant | Crowd / city restaurants with menu data | LLM only | + Qloo affinity | + Qloo crowd vs city | Full agent |
 |---|---|---|---|---|---|
-| Katz's Delicatessen, New York | 143 / 128 | ×0.57 (3/3) | ×0.88 (3/3) | ×1.68 (3/3) | ×1.46 (3/3) |
-| Gjelina, Los Angeles | 145 / 139 | ×1.27 (3/3) | ×1.23 (3/3) | ×4.82 (3/3) | ×3.95 (3/3) |
-| Casa Lucio, Madrid | 147 / 147 | ×0.85 (3/3) | ×0.50 (3/3) | ×3.81 (3/3) | ×3.16 (3/3) |
-| Au Cheval, Chicago | 150 / 141 | ×0.62 (3/3) | ×1.10 (3/3) | ×2.04 (3/3) | — |
-| Franklin Barbecue, Austin | 149 / 135 | ×0.55 (3/3) | ×1.09 (3/3) | ×1.17 (3/3) | — |
-| Zuni Café, San Francisco | 149 / 145 | ×1.79 (3/3) | ×2.67 (3/3) | ×6.01 (3/3) | — |
-| Dishoom, London | 150 / 116 | ×1.02 (3/3) | ×0.66 (3/3) | ×1.26 (3/3) | — |
-| Mama's Fish House, Maui | 144 / 143 | ×0.87 (3/3) | ×0.71 (3/3) | ×1.06 (3/3) | — |
+| Katz's Delicatessen, New York | 143 / 128 | ×0.57 (3/3) | ×0.88 (3/3) | ×2.33 (3/3) | ×2.32 (3/3) |
+| Gjelina, Los Angeles | 145 / 139 | ×0.93 (3/3) | ×1.70 (3/3) | ×4.82 (3/3) | ×3.95 (3/3) |
+| Casa Lucio, Madrid | 147 / 147 | ×0.85 (3/3) | ×0.47 (3/3) | ×3.81 (3/3) | ×3.16 (3/3) |
+| Au Cheval, Chicago | 150 / 141 | ×0.78 (3/3) | ×1.10 (3/3) | ×2.04 (3/3) | — |
+| Franklin Barbecue, Austin | 149 / 135 | ×0.56 (3/3) | ×1.04 (3/3) | ×1.49 (3/3) | — |
+| Zuni Café, San Francisco | 149 / 145 | ×1.97 (3/3) | ×2.67 (3/3) | ×6.01 (3/3) | — |
+| Dishoom, London | 150 / 116 | ×1.27 (3/3) | ×0.66 (3/3) | ×1.26 (3/3) | — |
+| Mama's Fish House, Maui | 144 / 143 | ×0.93 (3/3) | ×0.84 (3/3) | ×1.28 (3/3) | — |
 
 (matched = dishes with at least one food term on local menus, out of 3)
 
 | Aggregate over 8 restaurants | LLM only | + Qloo affinity | + Qloo crowd vs city |
 |---|---|---|---|
-| Geometric mean crowd lift | ×0.87 | ×0.97 | ×2.22 |
-| Median crowd lift | ×0.86 | ×0.99 | ×1.86 |
-| Restaurants where it beats LLM only | — | 4 / 8 | 8 / 8 |
+| Geometric mean crowd lift | ×0.91 | ×1.02 | ×2.44 |
+| Median crowd lift | ×0.89 | ×0.96 | ×2.19 |
+| Restaurants where it beats LLM only | — | 5 / 8 | 7 / 8 |
 | Dishes matched on local menus | 24 / 24 | 24 / 24 | 24 / 24 |
 
-Full agent (recorded playbooks, n = 3): geometric mean ×2.63; the same runs' own no-Qloo baselines: ×1.02. Recorded run times: 178 s, 102 s, 119 s.
+Full agent (recorded playbooks, n = 3): geometric mean ×3.07; the same runs' own no-Qloo baselines: ×0.90. Recorded run times: 178 s, 102 s, 119 s.
 
 ## Why the old Taste-Fit score could not tell plans apart
 
@@ -48,6 +48,6 @@ For the top 10 dish tags of each audience, the mean Qloo affinity was 99.2 for t
 - **The term matcher is a heuristic.** Dish names are matched to local menu tags by words (accents, case and simple plurals folded; preparation, season and format words ignored on their own). Creative names can match nothing (excluded from the score) or match a generic word.
 - **Small samples.** 8 restaurants, one sample per arm, ~150 restaurants per set; per-term counts are often single digits. Differences per restaurant are noisy; look at the aggregate.
 - **Coverage varies by city.** Qloo menu tags are richer in some cities than others.
-- **The full-agent column** rescores the dish names of local recordings made during development; it is only shown where one exists. A replay shows the score computed when it was recorded; Casa Lucio's replay shows ×2.90 because it was recorded before the final list of ignored words.
+- **The full-agent column** rescores the dish names of local recordings made during development; it is only shown where one exists.
 
 Raw per-restaurant results (dish names, term counts) contain Qloo-derived data and stay in eval/benchmark.local.json, which is not committed.
