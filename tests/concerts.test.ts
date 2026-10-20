@@ -69,6 +69,34 @@ describe("rankArtistsForAudience", () => {
     expect(r).toMatchObject({ ok: false, calls: 1 });
   });
 
+  it("waits and repeats an attempt that hit Qloo's rate limit", async () => {
+    const waits: number[] = [];
+    let n = 0;
+    const rankFn = vi.fn<RankFn>(async () => {
+      n += 1;
+      if (n <= 2) {
+        return { ok: false, status: "error", error: { code: "QLOO_RATE_LIMIT", layer: "transport", retryable: true, expected: true, recovery: "", message: "429" }, provenance: prov };
+      }
+      return ok([option("A", 1, 0.8)]);
+    });
+    const r = await rankArtistsForAudience({ artists: ["A"], restaurantId: "R1" }, rankFn, async (ms) => void waits.push(ms));
+    expect(waits).toEqual([2500, 5000]);
+    expect(rankFn).toHaveBeenCalledTimes(3);
+    expect(r).toMatchObject({ ok: true, calls: 3 });
+  });
+
+  it("gives up after two rate-limit waits", async () => {
+    const rankFn = vi.fn<RankFn>(async () => ({
+      ok: false,
+      status: "error",
+      error: { code: "QLOO_RATE_LIMIT", layer: "transport", retryable: true, expected: true, recovery: "", message: "429" },
+      provenance: prov,
+    }));
+    const r = await rankArtistsForAudience({ artists: ["A"], restaurantId: "R1" }, rankFn, async () => undefined);
+    expect(rankFn).toHaveBeenCalledTimes(3);
+    expect(r).toMatchObject({ ok: false, calls: 3 });
+  });
+
   it("passes the restaurant as the signal, the city as location and caps options at 10", async () => {
     const rankFn = vi.fn<RankFn>(async () => ok([]));
     await rankArtistsForAudience({ artists: Array.from({ length: 14 }, (_, i) => `Artist ${i}`), restaurantId: "R1", city: "Madrid" }, rankFn);

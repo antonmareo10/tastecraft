@@ -337,7 +337,7 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
           step.summary =
             ev.tool === "taste_map" && ev.summary?.startsWith("Hotspots: ")
               ? `Hotspots: ${[...new Set(ev.summary.slice(10).split(", "))].join(", ")}`
-              : ev.summary;
+              : ev.summary?.replace(/^1 concerts /, "1 concert ");
           step.entities = ev.entities;
         }
         if (ev.domain && ev.entities?.length && !ev.error) {

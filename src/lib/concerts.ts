@@ -21,18 +21,35 @@ export type ArtistRanking =
 export const MAX_RANKED_ARTISTS = 10;
 export const MAX_MATCHED_SHOWS = 5;
 
-/** Ranks artist names for the restaurant's audience. At most two rank calls: the second only after dropping unresolved names. */
+/** Waits after a Qloo rate limit before ranking again (2.5 s, then 5 s). */
+export const RATE_LIMIT_WAITS_MS = [2500, 5000];
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Ranks artist names for the restaurant's audience. At most two ranking attempts with different options (the second
+ * only after dropping unresolved names); an attempt that hits Qloo's rate limit is repeated after a short wait.
+ */
 export async function rankArtistsForAudience(
   opts: { artists: string[]; restaurantId: string; city?: string },
   rankFn: RankFn = harnessRank,
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<ArtistRanking> {
   const firstSpelling = new Map<string, string>();
   for (const a of opts.artists) if (normalizeArtist(a) && !firstSpelling.has(normalizeArtist(a))) firstSpelling.set(normalizeArtist(a), a.trim());
   let options = [...firstSpelling.values()].slice(0, MAX_RANKED_ARTISTS);
   const dropped: string[] = [];
+  let calls = 0;
+  let rateLimited = 0;
   for (let call = 1; call <= 2; call++) {
-    if (!options.length) return { ok: false, reason: "No artist name could be matched to a Qloo entity.", dropped, calls: call - 1 };
+    if (!options.length) return { ok: false, reason: "No artist name could be matched to a Qloo entity.", dropped, calls };
+    calls += 1;
     const r = await rankFn({ options, optionType: "artist", signals: [opts.restaurantId], ...(opts.city ? { location: opts.city } : {}) });
+    if (!r.ok && r.status === "error" && r.error.code === "QLOO_RATE_LIMIT" && rateLimited < RATE_LIMIT_WAITS_MS.length) {
+      // The run's other Qloo calls can exhaust the rate limit for a moment: wait and try the same options again.
+      await wait(RATE_LIMIT_WAITS_MS[rateLimited++]);
+      call -= 1;
+      continue;
+    }
     if (r.ok) {
       const scores = r.data.map((o) => ({
         input: o.input ?? o.name,
@@ -41,11 +58,11 @@ export async function rankArtistsForAudience(
         rank: o.rank,
         ...(typeof o.affinity === "number" ? { fanMatch: Math.round(Math.min(1, Math.max(0, o.affinity)) * 100) } : {}),
       }));
-      return { ok: true, scores, dropped, calls: call };
+      return { ok: true, scores, dropped, calls };
     }
     if (r.status === "needs_input" && call === 1) {
       const bad = new Set(r.issues.filter((i) => i.field === "options" && options.includes(i.input)).map((i) => i.input));
-      if (bad.size === 0) return { ok: false, reason: r.summary, dropped, calls: call }; // e.g. the restaurant itself did not resolve
+      if (bad.size === 0) return { ok: false, reason: r.summary, dropped, calls }; // e.g. the restaurant itself did not resolve
       dropped.push(...bad);
       options = options.filter((o) => !bad.has(o));
       continue;
@@ -54,10 +71,10 @@ export async function rankArtistsForAudience(
       ok: false,
       reason: r.status === "error" ? `${r.error.code}: ${r.error.message}` : `${r.summary} (${r.issues.map((i) => `${i.input}: ${i.status}`).join(", ")})`,
       dropped,
-      calls: call,
+      calls,
     };
   }
-  return { ok: false, reason: "Ranking did not complete.", dropped, calls: 2 };
+  return { ok: false, reason: "Ranking did not complete.", dropped, calls };
 }
 
 /** Attaches fan_match to each listed concert (best-matching billed artist) and keeps the top matches. */

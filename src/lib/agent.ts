@@ -671,7 +671,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           summary:
             match.strategy === "qloo_rank"
               ? top
-                ? `${match.shows.length} concerts ranked for your crowd · best: ${top.artist}${top.fan_match != null ? ` (fan match ${top.fan_match})` : ""}${games.length ? ` · ${games.length} game days` : ""}`
+                ? `${match.shows.length} concert${match.shows.length === 1 ? "" : "s"} ranked for your crowd · best: ${top.artist}${top.fan_match != null ? ` (fan match ${top.fan_match})` : ""}${games.length ? ` · ${games.length} game days` : ""}`
                 : (match.note ?? "No matched concerts nearby")
               : shows.length
                 ? `${shows.length} upcoming shows (keyword search) · next: ${shows[0].artist}, ${shows[0].date}`
