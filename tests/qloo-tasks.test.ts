@@ -188,6 +188,40 @@ describe("qlooGet", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("retries a rate limit (honouring retry-after) up to 3 attempts, then gives up", async () => {
+    vi.resetModules();
+    const limited = () => new Response("slow down", { status: 429, headers: { "retry-after": "0" } });
+    let n = 0;
+    const fetchMock = vi.fn(async () => (++n < 3 ? limited() : new Response(JSON.stringify({ ok: 1 }), { status: 200 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const { qlooGet } = await import("@/lib/qloo");
+    await expect(qlooGet("/search", { query: "z" })).resolves.toEqual({ ok: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const always = vi.fn(async () => limited());
+    vi.stubGlobal("fetch", always);
+    await expect(qlooGet("/search", { query: "w" })).rejects.toMatchObject({ code: "QLOO_RATE_LIMIT" });
+    expect(always).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps at most 4 requests in flight", async () => {
+    vi.resetModules();
+    let live = 0;
+    let peak = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        live += 1;
+        peak = Math.max(peak, live);
+        await new Promise((r) => setTimeout(r, 5));
+        live -= 1;
+        return new Response(JSON.stringify({}), { status: 200 });
+      }),
+    );
+    const { qlooGet } = await import("@/lib/qloo");
+    await Promise.all(Array.from({ length: 10 }, (_, i) => qlooGet("/search", { query: `q${i}` })));
+    expect(peak).toBe(4);
+  });
+
   it("throws a QlooError with the status on failure", async () => {
     vi.resetModules();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 401 })));

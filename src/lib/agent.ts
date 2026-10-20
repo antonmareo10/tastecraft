@@ -34,13 +34,16 @@ import { toTrendLine } from "./trends";
 import type { AgentEvent, AgentRequest, CrowdLift, Playbook } from "./types";
 
 const MODEL = process.env.TASTECRAFT_MODEL || "claude-opus-5-5";
+// Qloo's hackathon /v2/trending rejects places (filter.type must be a person, artist, brand, movie,
+// TV show or podcast), so place trends stay off unless a key that supports them opts in.
+const PLACE_TRENDS = process.env.QLOO_PLACE_TRENDS === "1";
 
 const SYSTEM = `You are Tastecraft, the taste-intelligence analyst for independent restaurants. Chains have insight teams; your job is to give a small restaurant the same edge using Qloo's taste graph (cross-domain affinity data across places, brands, music, film, TV, books and more).
 
 How you work:
 1. Locate the restaurant with find_restaurant. It auto-selects the best candidate and reports how sure the match is. If the match is ambiguous and another candidate clearly fits the owner's restaurant better (address in the city, same concept), call find_restaurant again with that entity_id. Never switch away from a match the owner confirmed. If nothing matches, say so in a note and work at city level using the concept the owner described.
 2. Build the audience's taste DNA with audience_affinity. Always run "place" (local places the same guests love). Then pick the 3 other domains most useful for the owner's goal (usually artist, brand and one of movie/tv_show/podcast). Call independent tools in parallel.
-3. Once the "place" results are in, run rising_nearby with the restaurant's entity_id plus the 3-4 highest-affinity local places, to see which of them are gaining or losing popularity. Rising peers are evidence of what is working nearby ("copy what's working nearby"); describe them as aggregate popularity trends over the window, never as the cause of anything.
+3. If the rising_nearby tool is available, once the "place" results are in, run it with the restaurant's entity_id plus the 3-4 highest-affinity local places, to see which of them are gaining or losing popularity. Rising peers are evidence of what is working nearby ("copy what's working nearby"); describe them as aggregate popularity trends over the window, never as the cause of anything.
 4. Run taste_tags for "dishes", "cuisines" and "ambience" (in parallel) to learn which specific dishes, cuisines and vibes this audience over-indexes on in this city, and audience_profile to learn their age and gender skew.
 5. Pick the closest rival from the "place" results (similar cuisine and price, high affinity) and run compare_rival to learn what distinguishes the two audiences.
 6. Run taste_gaps. It contrasts the ~150 restaurants this crowd loves most in the city with the city's ~150 most popular restaurants, so you can tell what this crowd specifically favours from what is simply popular everywhere: menu terms the crowd favours (lift above 1) or avoids (lift below 1), and cuisines, formats and vibes their favourite places have that this restaurant lacks.
@@ -56,8 +59,8 @@ Rules for the playbook:
 - Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
-- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Prefer dishes built on menu terms this crowd favours over the city (taste_gaps lift above 1), avoid terms it under-indexes on unless the goal requires them, and say so in the evidence ("on 11% of the menus your guests' favourite places carry vs 2% citywide").
-- Give each dish a plain menu name that says what it is (the food a guest would order). Tastecraft scores each dish name against what this crowd's favourite restaurants actually serve (the playbook's crowd lift), so do not pad names with extra keywords.
+- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Use taste_gaps to see what this crowd favours over the city (lift above 1) or avoids (below 1), and weigh it together with the restaurant's identity and kitchen: a good menu move is something this restaurant can credibly serve that its crowd over-indexes on, not a copy of another place's menu. When you use these shares, quote them in the evidence ("on 11% of the menus at your guests' favourite places vs 2% citywide").
+- Give each dish a plain, descriptive menu name.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
 - target_zones should use the neighborhood names returned by taste_map.
 - week_plan turns everything into next week's schedule (supplier order early in the week, launch, posts timed to when the audience goes out, the event, a review of results).
@@ -743,7 +746,7 @@ Owner's question: ${fu.question}`
       fallbacks: "default",
       stream: true,
       tools: fu
-        ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, risingTool, answerTool]
+        ? [affinityTool, tagsTool, profileTool, compareTool, gapsTool, mapTool, ...(PLACE_TRENDS ? [risingTool] : []), answerTool]
         : [
             findTool,
             affinityTool,
@@ -752,7 +755,7 @@ Owner's question: ${fu.question}`
             compareTool,
             gapsTool,
             mapTool,
-            risingTool,
+            ...(PLACE_TRENDS ? [risingTool] : []),
             ...(showsConfigured() ? [showsTool] : []),
             publishTool,
           ],

@@ -55,7 +55,7 @@ const NOT_A_DISH = new Set(
     "mini small large big new fresh homemade style chef weekly night late brunch breakfast lunch dinner " +
     "build own happy hour craft double triple " +
     "smoked grilled fried roasted baked braised charred spicy crispy loaded hot cold sweet sour slow " +
-    "wood fired stuffed glazed whole half black white red green golden local " +
+    "wood fired stuffed glazed crusted topped dusted whole half square round black white red green golden local " +
     "casero casera temporada especial plato tabla brasa plancha frito frita picante crujiente " +
     "negro rojo verde blanco"
   ).split(" "),

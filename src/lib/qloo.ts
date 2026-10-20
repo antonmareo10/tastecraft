@@ -48,6 +48,35 @@ export function qlooConfigured(): boolean {
   return Boolean(process.env.QLOO_API_KEY);
 }
 
+// The agent calls several tools in parallel and some tools page through results, so requests are
+// funnelled through a small in-flight limit instead of hitting Qloo in bursts.
+const MAX_IN_FLIGHT = 4;
+let inFlight = 0;
+const waiting: (() => void)[] = [];
+
+async function takeSlot(): Promise<void> {
+  if (inFlight < MAX_IN_FLIGHT) {
+    inFlight += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => waiting.push(resolve)); // the slot is handed over by releaseSlot
+}
+
+function releaseSlot(): void {
+  const next = waiting.shift();
+  if (next) next();
+  else inFlight -= 1;
+}
+
+const MAX_ATTEMPTS = 3; // like Qloo's official client: up to 3 attempts on 429; 5xx and network errors get one retry
+const MAX_WAIT_MS = 10_000;
+
+function retryDelay(res: Response | null, attempt: number): number {
+  const header = Number(res?.headers.get("retry-after"));
+  if (Number.isFinite(header) && header >= 0 && res?.headers.has("retry-after")) return Math.min(header * 1000, MAX_WAIT_MS);
+  return Math.min(1000 * 2 ** (attempt - 1), MAX_WAIT_MS); // 1 s, 2 s
+}
+
 export async function qlooGet<T = unknown>(path: string, params: Params = {}): Promise<T> {
   const apiKey = process.env.QLOO_API_KEY;
   if (!apiKey) throw new QlooError(500, "QLOO_API_KEY is not configured on the server.", "QLOO_CONFIG");
@@ -55,11 +84,12 @@ export async function qlooGet<T = unknown>(path: string, params: Params = {}): P
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value as T;
 
-  // At most one retry, and only for transient failures (rate limit with a short wait, 5xx, network).
-  for (let attempt = 0; ; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     let err: QlooError;
+    let res: Response | null = null;
+    await takeSlot();
     try {
-      const res = await fetch(url, {
+      res = await fetch(url, {
         headers: { "X-Api-Key": apiKey, accept: "application/json" },
         signal: AbortSignal.timeout(20_000),
       });
@@ -69,24 +99,18 @@ export async function qlooGet<T = unknown>(path: string, params: Params = {}): P
         return json;
       }
       err = errorFor(res.status, path, (await res.text()).slice(0, 300));
-      const wait = Number(res.headers.get("retry-after"));
-      if (err.code === "QLOO_RATE_LIMIT" && !(wait > 0 && wait <= 5)) err.retryable = false;
-      if (attempt === 0 && err.retryable) {
-        await new Promise((r) => setTimeout(r, wait > 0 ? wait * 1000 : 800));
-        continue;
-      }
     } catch (e) {
       if (e instanceof QlooError) throw e;
       const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       err = timedOut
         ? new QlooError(0, `Qloo did not answer within 20 s on ${path}.`, "QLOO_TIMEOUT", true)
         : new QlooError(0, `Could not reach Qloo (${e instanceof Error ? e.message : String(e)}).`, "QLOO_CONNECT", true);
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 800));
-        continue;
-      }
+    } finally {
+      releaseSlot();
     }
-    throw err;
+    const limit = err.code === "QLOO_RATE_LIMIT" ? MAX_ATTEMPTS : 2;
+    if (!err.retryable || attempt >= limit) throw err;
+    await new Promise((r) => setTimeout(r, retryDelay(res, attempt)));
   }
 }
 
