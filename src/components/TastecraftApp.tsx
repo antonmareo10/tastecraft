@@ -7,6 +7,7 @@ import { m } from "motion/react";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
 import { readNdjson } from "@/lib/ndjson";
 import { stepLabel } from "@/lib/lens";
+import { favoursSummary } from "@/lib/menu-terms";
 import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
 import { scrollToElement } from "@/lib/scroll";
 import type { Step, TimelineItem } from "./Timeline";
@@ -481,6 +482,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
 function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState } {
   const items: TimelineItem[] = [];
   const steps = new Map<string, Step>();
+  const lensed = new Set<string>(); // steps run with a demographic lens
   const live: LiveState = { dna: {}, tags: {} };
   events.forEach((ev, i) => {
     switch (ev.type) {
@@ -491,6 +493,7 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         // Older recordings carry raw lens values ("(lens: 24_and_younger)"); show them in plain words.
         const step: Step = { id: ev.id, tool: ev.tool, label: stepLabel(ev.label, ev.input), done: false };
         steps.set(ev.id, step);
+        if (ev.input?.lens_age || ev.input?.lens_gender) lensed.add(ev.id);
         items.push({ kind: "step", step });
         break;
       }
@@ -502,7 +505,10 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
           step.summary =
             ev.tool === "taste_map" && ev.summary?.startsWith("Hotspots: ")
               ? `Hotspots: ${[...new Set(ev.summary.slice(10).split(", "))].join(", ")}`
-              : ev.summary?.replace(/^1 concerts /, "1 concert ");
+              : ev.tool === "taste_gaps" && ev.summary
+                ? // Same readable terms as the crowd-vs-city list (the unlensed call's list arrives just before).
+                  favoursSummary(ev.summary, lensed.has(ev.id) ? undefined : live.crowdMenu?.favours)
+                : ev.summary?.replace(/^1 concerts /, "1 concert ");
           // For the restaurant search, show the pick and only the runner-ups Qloo tags as restaurants
           // (older recordings carry no tag: they show the pick alone, not the landmarks a city search returns).
           step.entities =
