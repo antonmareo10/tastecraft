@@ -13,6 +13,9 @@
   --terracotta: #c0532c;
   --saffron: #dd9a2e;
   --plum: #6b3b5a;
+  /* One motion language: entrances ease out on this curve (see src/lib/motion.ts). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 @theme inline {
@@ -60,10 +63,21 @@ body {
   background-size: 6px 6px;
 }
 
+@layer base {
+  /* Visible keyboard focus on every interactive element (utilities can still refine it). */
+  :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--olive);
+    outline-offset: 2px;
+  }
+  .on-dark :where(a, button, summary, [tabindex]):focus-visible {
+    outline-color: var(--paper);
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -72,7 +86,68 @@ body {
 }
 
 .rise {
-  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: rise 0.5s var(--ease-out) both;
+}
+
+/* Hero entrances: pure CSS so the server-rendered hero animates on first paint, before JS. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.6s var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+/* Kinetic type: each word slides up out of its own mask, 50 ms after the previous one. */
+.kinetic .kw {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.kinetic .kw > span {
+  display: inline-block;
+  transform: translateY(108%);
+}
+
+.kinetic[data-in] .kw > span {
+  animation: word-up 0.6s var(--ease-out) forwards;
+  animation-delay: calc(var(--i, 0) * 50ms + var(--d0, 0ms));
+}
+
+@keyframes word-up {
+  to {
+    transform: none;
+  }
+}
+
+/* The hand-drawn stroke under the hero's last word. */
+.squiggle path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 0.7s var(--ease-out) 0.85s forwards;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hero-light {
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent);
+}
+
+.hero-light[data-ready] {
+  opacity: 1;
 }
 
 @keyframes pulse-dot {
@@ -89,10 +164,216 @@ body {
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
+/* "Recorded run" tag: a calm breathing dot. */
+.rec-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--terracotta);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--terracotta) 45%, transparent);
+  animation: ring-pulse 2.4s var(--ease-out) infinite;
+}
+
+/* The agent's active step. */
+.ring-pulse {
+  animation: ring-pulse 1.8s var(--ease-out) infinite;
+}
+
+@keyframes ring-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--terracotta) 40%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--terracotta) 0%, transparent);
+  }
+}
+
+/* Cards with a little depth under the cursor (hover devices only). */
+@media (hover: hover) {
+  .lift {
+    transition:
+      transform 0.35s var(--ease-out),
+      box-shadow 0.35s var(--ease-out),
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px -22px rgba(29, 27, 23, 0.42);
+  }
+}
+
+/* Bars that draw in once their group scrolls into view (data-bars + data-in set from JS). */
+.bar-fill {
+  transform-origin: left center;
+}
+
+.bar-fill.from-right {
+  transform-origin: right center;
+}
+
+[data-bars] .bar-fill {
+  transform: scaleX(0);
+  transition: transform 0.7s var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 45ms + 120ms);
+}
+
+[data-bars][data-in] .bar-fill {
+  transform: none;
+}
+
+/* Skeletons shaped like the playbook, with a soft sweep. */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--card) 65%, transparent), transparent);
+  animation: shimmer 1.5s var(--ease-in-out) infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Footer: the data and tools behind Tastecraft, drifting by; pauses on hover or focus. */
+.marquee {
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 48s linear infinite;
+}
+
+.marquee:hover .marquee-track,
+.marquee:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Taste map: heat cells bloom outwards from the restaurant, then the hotspots pop in. */
+.tm-wrap:not([data-in]) .tm-cell,
+.tm-wrap:not([data-in]) .tm-zone,
+.tm-wrap:not([data-in]) .leaflet-tooltip-pane {
+  opacity: 0;
+}
+
+.tm-wrap .tm-cell,
+.tm-wrap .tm-zone,
+.tm-wrap .tm-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.tm-wrap[data-in] .tm-cell {
+  animation: tm-cell 0.6s var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+.tm-wrap[data-in] .tm-zone {
+  animation: tm-pop 0.45s var(--ease-out) both;
+  animation-delay: calc(650ms + var(--d, 0ms));
+}
+
+.tm-wrap .leaflet-tooltip-pane {
+  transition: opacity 0.5s var(--ease-out) 0.9s;
+}
+
+.tm-wrap[data-in] .tm-pulse {
+  animation: tm-pulse 2.2s var(--ease-out) 0.9s 3 both;
+}
+
+@keyframes tm-cell {
+  from {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+}
+
+@keyframes tm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+
+@keyframes tm-pulse {
+  from {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.8);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise,
-  .pulse-dot {
-    animation: none;
+  .pulse-dot,
+  .fade-up,
+  .rec-dot,
+  .ring-pulse,
+  .shimmer::after,
+  .marquee-track,
+  .squiggle path,
+  .kinetic .kw > span,
+  .tm-wrap .tm-cell,
+  .tm-wrap .tm-zone,
+  .tm-wrap .tm-pulse {
+    animation: none !important;
+  }
+  .kinetic .kw > span,
+  [data-bars] .bar-fill {
+    transform: none;
+    transition: none;
+  }
+  .squiggle path {
+    stroke-dashoffset: 0;
+  }
+  .hero-light,
+  .tm-wrap .leaflet-tooltip-pane {
+    transition: none;
+  }
+  .tm-wrap:not([data-in]) .tm-cell,
+  .tm-wrap:not([data-in]) .tm-zone,
+  .tm-wrap:not([data-in]) .leaflet-tooltip-pane {
+    opacity: 1;
+  }
+  .tm-wrap .tm-pulse {
+    opacity: 0;
+  }
+  .lift,
+  .lift:hover {
+    transform: none;
+    transition: none;
+  }
+  .marquee-track {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: auto;
+  }
+  .marquee {
+    mask-image: none;
+  }
+  .marquee-dup {
+    display: none;
   }
 }
 
@@ -120,5 +401,16 @@ body {
   }
   section {
     break-inside: avoid;
+  }
+  /* Nothing waits for a scroll on paper. */
+  [data-reveal],
+  .kinetic .kw > span,
+  [data-bars] .bar-fill,
+  .tm-wrap .tm-cell,
+  .tm-wrap .tm-zone,
+  .tm-wrap .leaflet-tooltip-pane {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
   }
 }
