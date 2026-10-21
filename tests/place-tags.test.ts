@@ -15,7 +15,7 @@ describe("tagNoise", () => {
   });
 
   it("flags landmarks and nearby attractions", () => {
-    for (const t of ["Next to the royal palace", "Near Central Park", "Union Station", "Art museum nearby", "Theatre district"]) {
+    for (const t of ["Next to the old palace", "Near Central Park", "Union Station", "Art museum nearby", "Theatre district"]) {
       expect(tagNoise(t), t).toBe("landmark");
     }
   });
