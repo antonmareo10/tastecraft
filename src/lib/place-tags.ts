@@ -2,16 +2,17 @@
 // constellation). Display only: the agent still receives every tag.
 //
 // Qloo tags a place with everything it knows, including age buckets, pandemic-era notices and nearby
-// landmarks, which read as noise in a header ("35 44", "Staff wear masks", "Royal palace of madrid").
+// landmarks, which read as noise in a header (invented examples: "18 24", "Masks required", "Near the
+// old cathedral").
 // Recorded runs carry tag names only (no tag types), so the rules work on the text alone and filter
 // recorded and live runs the same way. A tag is dropped when it:
 //
-//   1. repeats an earlier tag (case, accents and spacing ignored): "Authentic" twice;
-//   2. contains a digit: Qloo's age buckets ("35 44") and similar codes;
-//   3. is a health-and-safety notice ("Staff wear masks", "Contactless payments");
-//   4. names a landmark or nearby attraction ("Royal palace of madrid", "Near Central Park");
-//   5. is about logistics, payment or access ("Reservations", "Wheelchair accessible seating",
-//      "Table service", "Street view").
+//   1. repeats an earlier tag (case, accents and spacing ignored): "Cozy" then "cozy";
+//   2. contains a digit: Qloo's age buckets ("18 24") and similar codes;
+//   3. is a health-and-safety notice ("Masks required", "Contactless payments");
+//   4. names a landmark or nearby attraction ("Near the old cathedral", "Near Central Park");
+//   5. is about logistics, payment or access ("Takes reservations", "Wheelchair-friendly entrance",
+//      "Table service", "Harbour view").
 //
 // The word lists match whole words only, so "Parkside grill" or "Viewpoint" are kept.
 

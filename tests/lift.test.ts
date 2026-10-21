@@ -97,8 +97,8 @@ describe("low count", () => {
   });
 
   it("marks a dish when any of its matched terms is low count", () => {
-    expect(dishLowCount([{ crowd: 23, city: 23 }, { crowd: 4, city: 0 }])).toBe(true);
-    expect(dishLowCount([{ crowd: 13, city: 3 }, { crowd: 5, city: 2 }])).toBe(false);
+    expect(dishLowCount([{ crowd: 30, city: 26 }, { crowd: 3, city: 1 }])).toBe(true);
+    expect(dishLowCount([{ crowd: 11, city: 4 }, { crowd: 6, city: 1 }])).toBe(false);
     expect(dishLowCount([])).toBe(false);
     expect(dishLowCount(undefined)).toBe(false);
   });

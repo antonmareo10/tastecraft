@@ -15,27 +15,27 @@ const crowdMenu = (n: [number, number], lifts: [number, number]): AgentEvent => 
   city: "Springfield",
   crowd_n: n[0],
   city_n: n[1],
-  favours: [term("Rye bread", 8, 0, ...lifts), term("Pickles", 14, 2, ...lifts)],
-  avoids: [term("Milkshakes", 0, 8, ...lifts)],
+  favours: [term("Rye bread", 9, 1, ...lifts), term("Pickles", 12, 3, ...lifts)],
+  avoids: [term("Waffles", 1, 9, ...lifts)],
 });
 
 describe("withMenuDenominators", () => {
   it("gives an old recording the menu-data denominators its lifts were computed on", () => {
-    const events = [crowdMenu([150, 150], [145, 139]), playbook(145, 139)];
+    const events = [crowdMenu([150, 150], [141, 133]), playbook(141, 133)];
     const fixed = withMenuDenominators(events)[0] as Extract<AgentEvent, { type: "crowd_menu" }>;
-    expect([fixed.crowd_n, fixed.city_n]).toEqual([145, 139]);
+    expect([fixed.crowd_n, fixed.city_n]).toEqual([141, 133]);
     expect(fixed.favours).toEqual((events[0] as Extract<AgentEvent, { type: "crowd_menu" }>).favours); // counts and lifts untouched
   });
 
   it("leaves the event alone when its lifts do not fit the playbook's sets", () => {
-    const events = [crowdMenu([150, 150], [150, 150]), playbook(145, 139)];
+    const events = [crowdMenu([150, 150], [150, 150]), playbook(141, 133)];
     expect(withMenuDenominators(events)[0]).toBe(events[0]);
   });
 
   it("leaves recordings without a crowd-lift block or already correct as they are", () => {
-    const noLift = [crowdMenu([150, 150], [145, 139])];
+    const noLift = [crowdMenu([150, 150], [141, 133])];
     expect(withMenuDenominators(noLift)).toEqual(noLift);
-    const current = [crowdMenu([145, 139], [145, 139]), playbook(145, 139)];
+    const current = [crowdMenu([141, 133], [141, 133]), playbook(141, 133)];
     expect(withMenuDenominators(current)[0]).toBe(current[0]);
   });
 });

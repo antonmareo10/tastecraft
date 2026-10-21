@@ -79,21 +79,21 @@ describe("displayMenuTerms", () => {
 
 describe("supportedFirst", () => {
   it("moves low-count terms after the others and keeps each group's order", () => {
-    const list = [t("Acai bowl", 8, 0, 8.6), t("amatriciana", 4, 0, 4.8), t("squash", 14, 2, 4.8), t("Cold brew", 4, 0, 4.8), t("coffee", 8, 1, 4.3)];
-    expect(supportedFirst(list).map((x) => x.term)).toEqual(["Acai bowl", "squash", "coffee", "amatriciana", "Cold brew"]);
+    const list = [t("Poke bowl", 9, 0, 7.1), t("tamarind", 4, 0, 4.9), t("pumpkin", 12, 3, 3.6), t("Fish sauce", 3, 1, 3.1), t("matcha", 7, 1, 3.3)];
+    expect(supportedFirst(list).map((x) => x.term)).toEqual(["Poke bowl", "pumpkin", "matcha", "tamarind", "Fish sauce"]);
   });
 
   it("leaves terms without counts in place", () => {
-    const list = [{ term: "Matcha" }, t("pastrami", 3, 1), { term: "oat milk" }];
-    expect(supportedFirst(list).map((x) => x.term)).toEqual(["Matcha", "oat milk", "pastrami"]);
+    const list = [{ term: "Matcha" }, t("tamarind", 3, 1), { term: "oat milk" }];
+    expect(supportedFirst(list).map((x) => x.term)).toEqual(["Matcha", "oat milk", "tamarind"]);
   });
 });
 
 describe("favoursSummary", () => {
   it("leads with better-supported terms when the full list is known", () => {
-    const favours = [t("Acai bowl", 8, 0, 8.63), t("amatriciana", 4, 0, 4.8), t("Cold brew", 4, 0, 4.8), t("squash", 14, 2, 4.8), t("coffee", 8, 1, 4.32)];
-    expect(favoursSummary("Your crowd favours: Acai bowl ×8.6, amatriciana ×4.8, Cold brew ×4.8", favours)).toBe(
-      "Your crowd favours: Acai bowl ×8.6, squash ×4.8, coffee ×4.3",
+    const favours = [t("Poke bowl", 9, 0, 7.12), t("tamarind", 4, 0, 4.9), t("Fish sauce", 3, 1, 4.1), t("pumpkin", 12, 3, 3.62), t("matcha", 7, 1, 3.31)];
+    expect(favoursSummary("Your crowd favours: Poke bowl ×7.1, tamarind ×4.9, Fish sauce ×4.1", favours)).toBe(
+      "Your crowd favours: Poke bowl ×7.1, pumpkin ×3.6, matcha ×3.3",
     );
   });
 

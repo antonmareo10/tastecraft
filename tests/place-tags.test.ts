@@ -1,33 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { headerTags, tagNoise } from "@/lib/place-tags";
 
-// Invented tag lists in the shape Qloo returns (names only, as in recorded runs).
+// Invented tag lists in the shape Qloo returns (names only, as in recorded runs). No recorded Qloo data.
 describe("tagNoise", () => {
   it("flags age buckets and other codes with digits", () => {
-    expect(tagNoise("35 44")).toBe("digits");
+    expect(tagNoise("18 24")).toBe("digits");
     expect(tagNoise("25-34")).toBe("digits");
   });
 
   it("flags pandemic-era health notices", () => {
-    for (const t of ["Staff wear masks", "Mask required", "Social distancing", "Contactless payments", "Temperature checks", "Hand sanitizer"]) {
+    for (const t of ["Masks for staff", "Mask required", "Social distancing", "Contactless payments", "Temperature checks", "Hand sanitizer"]) {
       expect(tagNoise(t), t).toBe("health");
     }
   });
 
   it("flags landmarks and nearby attractions", () => {
-    for (const t of ["Royal palace of madrid", "Near Central Park", "Union Station", "Art museum nearby", "Theatre district"]) {
+    for (const t of ["Next to the royal palace", "Near Central Park", "Union Station", "Art museum nearby", "Theatre district"]) {
       expect(tagNoise(t), t).toBe("landmark");
     }
   });
 
   it("flags logistics, payment and access", () => {
-    for (const t of ["Reservations", "Wheelchair accessible seating", "Table service", "Street view", "Free Wi-Fi", "Credit cards", "Parking"]) {
+    for (const t of ["Takes reservations", "Wheelchair-friendly entrance", "Table service", "Harbour view", "Free Wi-Fi", "Credit cards", "Parking"]) {
       expect(tagNoise(t), t).toBe("logistics");
     }
   });
 
   it("keeps taste and vibe tags, matching whole words only", () => {
-    for (const t of ["Authentic", "Old world tavern", "Corned beef sandwich", "Outdoor seating", "Parkside grill", "Viewpoint brunch", "Stylish", "Tourists", "Takeout", "Casual"]) {
+    for (const t of ["Rustic", "Old harbour inn", "Smoked trout plate", "Patio seating", "Parkside grill", "Viewpoint brunch", "Trendy", "Locals", "Counter pickup", "Laid back"]) {
       expect(tagNoise(t), t).toBeNull();
     }
   });
@@ -35,18 +35,18 @@ describe("tagNoise", () => {
 
 describe("headerTags", () => {
   it("drops noise and duplicates and keeps Qloo's order", () => {
-    const tags = ["35 44", "Royal palace of madrid", "Touristic", "Couples", "Staff wear masks", "Old world tavern", "Large group"];
-    expect(headerTags(tags)).toEqual(["Touristic", "Couples", "Old world tavern", "Large group"]);
+    const tags = ["18 24", "Near the old cathedral", "Romantic", "Late night", "Masks required", "Wood-fired", "Big groups"];
+    expect(headerTags(tags)).toEqual(["Romantic", "Late night", "Wood-fired", "Big groups"]);
   });
 
   it("removes repeats regardless of case, accents and spacing, keeping the first spelling", () => {
-    const tags = ["Takeout", "Authentic", "Street view", "authentic ", "Beef brisket", "Café", "Cafe", "Outdoor  seating", "Outdoor seating"];
-    expect(headerTags(tags)).toEqual(["Takeout", "Authentic", "Beef brisket", "Café", "Outdoor seating"]);
+    const tags = ["Delivery", "Cozy", "Garden view", "cozy ", "Lamb shank", "Café", "Cafe", "Family  style", "Family style"];
+    expect(headerTags(tags)).toEqual(["Delivery", "Cozy", "Lamb shank", "Café", "Family style"]);
   });
 
   it("stops at max after filtering, so noise never takes a slot", () => {
-    const tags = ["Reservations", "Stylish", "Wheelchair accessible seating", "Urban", "35 44", "American", "Brunch"];
-    expect(headerTags(tags, 3)).toEqual(["Stylish", "Urban", "American"]);
+    const tags = ["Takes reservations", "Lively", "Wheelchair-friendly entrance", "Hip", "25 34", "Thai", "Brunch"];
+    expect(headerTags(tags, 3)).toEqual(["Lively", "Hip", "Thai"]);
   });
 
   it("handles missing and empty input", () => {
