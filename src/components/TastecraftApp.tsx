@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
+import { gainPct, HELD_OUT } from "@/lib/benchmark";
 import { readNdjson } from "@/lib/ndjson";
 import { stepLabel } from "@/lib/lens";
 import { favoursSummary } from "@/lib/menu-terms";
@@ -200,21 +201,20 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                 style={{ "--d": "560ms" } as React.CSSProperties}
               >
                 <div className="shrink-0 text-center">
-                  {/* Final values from the server, revealed by CSS from the first paint: no frame ever shows a wrong number. */}
+                  {/* Final values, revealed by CSS from the first paint: no frame ever shows a wrong number. */}
                   <div className="fade-up font-display text-5xl leading-none tabular-nums text-olive" style={{ "--d": "760ms" } as React.CSSProperties}>
-                    ×1.15
+                    {gainPct(HELD_OUT.ratio)}
                   </div>
-                  <div className="mt-1 text-[11px] text-muted">
-                    vs <span className="tabular-nums">×0.90</span> without Qloo
-                  </div>
+                  <div className="mt-1 max-w-[7.5rem] text-[11px] leading-tight text-muted">vs the same model alone</div>
                 </div>
                 <p className="text-[13px] leading-snug text-ink-2">
-                  <span className="font-semibold text-ink">Crowd lift, measured on restaurants the model never saw.</span> Given
-                  Qloo’s crowd-vs-city contrast from half of each city’s restaurants, the same model suggests dishes that the
-                  other half’s crowd favourites serve 1.15× as often as the city’s most popular ones; on its own, 0.90×. 8
-                  restaurants in 8 cities, 5 random splits ·{" "}
+                  <span className="font-semibold text-ink">Measured on restaurants it never saw.</span> With Qloo’s crowd-vs-city
+                  signal, Claude’s dish ideas lean {gainPct(HELD_OUT.ratio).slice(1)} further towards what each restaurant’s crowd
+                  favours than without it (95% CI {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in {HELD_OUT.better} of{" "}
+                  {HELD_OUT.restaurants} restaurants. The ruler is Qloo’s own menu tags: how often the crowd’s favourite places serve a
+                  dish compared with the city’s most popular ones ·{" "}
                   <a
-                    href="https://github.com/antonmareo10/tastecraft/blob/main/eval/SUMMARY.md"
+                    href={HELD_OUT.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline decoration-line underline-offset-2 hover:text-ink"
@@ -311,7 +311,13 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
               {demos.length ? (
                 <>
                   <p className="mb-2.5 text-[13px] font-medium text-ink">Instant replays of real runs</p>
-                  <ReplayCards demos={demos} onPlay={playDemo} disabled={running} variant="grid" />
+                  {/* Phones keep the full-width rows; three cards side by side do not fit 390 px. */}
+                  <div className="sm:hidden">
+                    <ReplayCards demos={demos} onPlay={playDemo} disabled={running} variant="list" />
+                  </div>
+                  <div className="hidden sm:block">
+                    <ReplayCards demos={demos} onPlay={playDemo} disabled={running} variant="grid" />
+                  </div>
                 </>
               ) : (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
@@ -450,6 +456,9 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                       city={form.city}
                       headline={live.playbook.headline}
                       language={form.language}
+                      afterReplay={replay != null}
+                      demos={demos}
+                      onPlayDemo={playDemo}
                     />
                   </div>
                 )}

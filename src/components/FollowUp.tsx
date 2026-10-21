@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { readNdjson } from "@/lib/ndjson";
 import { stepLabel } from "@/lib/lens";
 import type { AgentEvent, AgentRequest, EntityRef, Evidence } from "@/lib/types";
+import type { DemoSummary } from "./ReplayCards";
 import { IconArrow, IconCheck, IconSpark } from "./icons";
 import { EvidenceLine, Section } from "./ui";
 
@@ -13,6 +14,8 @@ type Thread = {
   answer?: string;
   evidence?: Evidence[];
   error?: string;
+  // Live runs are capped or paused on this demo (HTTP 429/503): say so plainly and offer the replays.
+  paused?: boolean;
   running: boolean;
 };
 
@@ -27,11 +30,18 @@ export default function FollowUp({
   city,
   headline,
   language,
+  afterReplay = false,
+  demos = [],
+  onPlayDemo,
 }: {
   restaurant: EntityRef;
   city: string;
   headline?: string;
   language?: AgentRequest["language"];
+  /** The playbook above is a recorded run: questions here start a live run, so say so. */
+  afterReplay?: boolean;
+  demos?: DemoSummary[];
+  onPlayDemo?: (d: DemoSummary) => void;
 }) {
   const [question, setQuestion] = useState("");
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -64,6 +74,10 @@ export default function FollowUp({
       });
       if (!res.ok || !res.body) {
         const info = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (res.status === 429 || res.status === 503) {
+          update((t) => ({ ...t, paused: true, error: info?.error ?? "Live runs are paused on this demo." }));
+          return;
+        }
         throw new Error(info?.error ?? `Request failed (${res.status})`);
       }
       for await (const ev of readNdjson<AgentEvent>(res.body)) {
@@ -77,7 +91,7 @@ export default function FollowUp({
         } else if (ev.type === "answer") {
           update((t) => ({ ...t, answer: ev.answer, evidence: ev.evidence }));
         } else if (ev.type === "error") {
-          update((t) => ({ ...t, error: ev.message }));
+          update((t) => ({ ...t, error: ev.message, paused: /paused|used up/i.test(ev.message) || t.paused }));
         }
       }
     } catch (err) {
@@ -119,19 +133,32 @@ export default function FollowUp({
           </button>
         </form>
         {threads.length === 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => ask(s)}
-                disabled={busy}
-                className="rounded-full border border-line bg-paper/60 px-3 py-1.5 text-[13px] text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <>
+            {afterReplay && (
+              <p className="mt-3 text-[12px] leading-snug text-muted">
+                <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-terracotta/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-terracotta-ink">
+                  <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-terracotta" aria-hidden />
+                  Live run
+                </span>
+                The playbook above is a recording; a question starts the agent live on Qloo and Claude and counts towards this
+                demo’s daily live-run limit.
+              </p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => ask(s)}
+                  disabled={busy}
+                  className="rounded-full border border-line bg-paper/60 px-3 py-1.5 text-[13px] text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
+                >
+                  {afterReplay && <span className="sr-only">Live run: </span>}
+                  {s}
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -163,11 +190,34 @@ export default function FollowUp({
                 ))}
               </ul>
             )}
-            {t.error && (
+            {t.error && t.paused ? (
+              <div role="status" className="mt-3 rounded-lg border border-line bg-card px-3 py-2.5 text-sm">
+                <p className="text-ink">
+                  Live runs are resting for now: this public demo caps them to protect its budget, so the agent can’t answer this one
+                  live.
+                </p>
+                <p className="mt-1 text-[12px] text-muted">{t.error}</p>
+                {demos.length > 0 && onPlayDemo && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted">Watch a recorded real run instead:</span>
+                    {demos.map((d) => (
+                      <button
+                        key={d.slug}
+                        type="button"
+                        onClick={() => onPlayDemo(d)}
+                        className="min-h-8 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
+                      >
+                        {d.restaurant} →
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : t.error ? (
               <p role="alert" className="mt-3 text-sm text-terracotta-ink">
                 {t.error}
               </p>
-            )}
+            ) : null}
           </article>
         ))}
       </div>
