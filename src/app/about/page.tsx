@@ -85,8 +85,8 @@ export default function About() {
           Does Qloo make the dishes better? On restaurants the model never saw (8 restaurants in 8 cities, same model and effort
           in every arm), Qloo’s crowd-vs-city signal gave {gainPct(HELD_OUT.ratio)} over the same model alone (95% CI{" "}
           {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in {HELD_OUT.better} of {HELD_OUT.restaurants}. A
-          playbook’s own score is higher because the agent sees the contrast it is scored on; that is why the number above is
-          the one to quote.{" "}
+          playbook’s own score is higher because the agent sees the contrast it is scored on, so this held-out gain is the
+          number to quote.{" "}
           <a href={HELD_OUT.url} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
             Method and limits
           </a>
