@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { AnimatePresence, m } from "motion/react";
 import type { TermLift } from "@/lib/lift";
+import { displayMenuTerms } from "@/lib/menu-terms";
 import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
 import type { CrowdLift, EntityRef, HeatCell, Playbook, Resolution, ShowRef, TrendLine, Zone } from "@/lib/types";
 import {
@@ -240,7 +241,7 @@ export default function PlaybookView({
                 <ul className="space-y-1.5">
                   {live.dna[d].slice(0, 6).map((e, i) => (
                     <li key={e.entity_id} className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-sm" title={e.subtitle}>
+                      <span className="line-clamp-2 min-w-0 break-words text-sm leading-snug" title={e.subtitle ? `${e.name} · ${e.subtitle}` : e.name}>
                         {e.name}
                       </span>
                       <AffinityBar value={e.affinity} index={i} />
@@ -746,7 +747,9 @@ function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: s
 // Crowd vs city, term by term: the share of the crowd's favourite restaurants whose menus carry
 // the term (olive) against the share of the city's most popular ones (grey), drawn to one scale.
 function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
-  const rows = data.favours.slice(0, 6);
+  // Only terms that read as dishes or foods (src/lib/menu-terms.ts); counts and lifts are unchanged.
+  const rows = displayMenuTerms(data.favours).slice(0, 6);
+  const avoids = displayMenuTerms(data.avoids).slice(0, 4);
   const share = (n: number, of: number) => (of > 0 ? n / of : 0);
   const top = Math.max(1e-6, ...rows.flatMap((t) => [share(t.crowd, data.crowd_n), share(t.city, data.city_n)]));
   const width = (v: number) => `${(v / top) * 100}%`;
@@ -799,9 +802,9 @@ function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
           ))}
         </ul>
       </InViewGroup>
-      {data.avoids.length > 0 && (
+      {avoids.length > 0 && (
         <p className="mt-2.5 text-[11px] leading-snug text-muted">
-          Rarer with your crowd: {data.avoids.slice(0, 4).map((t) => t.term).join(" · ")}
+          Rarer with your crowd: {avoids.map((t) => t.term).join(" · ")}
         </p>
       )}
       <p className="mt-2 text-[11px]">

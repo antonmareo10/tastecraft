@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useId, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { shortLabel } from "@/lib/labels";
 import type { EntityRef } from "@/lib/types";
 
 /*
@@ -90,6 +91,8 @@ const CSS = `
 .tc-fade{animation:tc-fade .6s ease-out both}
 .tc-draw{stroke-dasharray:1 1;animation:tc-draw .9s cubic-bezier(.3,.6,.2,1) both}
 .tc-dim{transition:opacity .18s ease,stroke-opacity .18s ease}
+.tc-star{outline:none}
+.tc-star:focus-visible .tc-ring{stroke:#1d1b17;stroke-width:2;stroke-opacity:1}
 @media (prefers-reduced-motion:reduce){.tc-pop,.tc-fade,.tc-draw{animation:none}.tc-dim{transition:none}}
 `;
 
@@ -215,6 +218,8 @@ type ModelNode = {
   /** Visual strength 0..1 (1 = innermost orbit, largest star). */
   t: number;
   tooltip: string;
+  /** Full name, place, domain and score, for screen readers and keyboard focus. */
+  ariaLabel: string;
 };
 
 type ModelSector = { domain: string; label: string; color: string; nodes: ModelNode[] };
@@ -292,6 +297,7 @@ function buildModel(center: TasteConstellationProps["center"], domains: TasteCon
           score,
           t,
           tooltip: `${name}${subtitle ? ` · ${subtitle}` : ""}\n${label} — ${scoreText}`,
+          ariaLabel: `${name}${subtitle ? ` (${subtitle})` : ""}, ${label}, ${score === null ? "affinity not scored" : `affinity ${score} out of 100`}`,
         };
       });
     return { domain: p.domain, label, color: colors[si], nodes };
@@ -667,7 +673,7 @@ function computeLayout(model: Model, width: number): Layout {
   const byPriority = [...nodes].sort((a, b) => a.rank - b.rank || b.t - a.t);
   const placed: Box[] = [];
   for (const nd of byPriority) {
-    const text = truncate(nd.name, g.maxChars);
+    const text = shortLabel(nd.name, g.maxChars);
     const w = widthOf(text, nd.rank === 0, nd.score);
     const options = candidatesFor(nd, text, w, true).filter(
       (c) =>
@@ -698,7 +704,7 @@ function computeLayout(model: Model, width: number): Layout {
       placed.push(pick.box);
     }
     // Hover/tap label: longer text, only needs to stay inside the canvas.
-    const full = truncate(nd.name, g.compact ? 26 : 34);
+    const full = shortLabel(nd.name, g.compact ? 26 : 34);
     const fw = full.length * (fs + 0.5) * 0.58 + 5 + 3 * fs * 0.6; // name + "· score" tspan, always shown
     const focusOptions = candidatesFor(nd, full, fw, false);
     const fit = focusOptions.find((c) => inBounds(c.box)) ?? focusOptions[0];
@@ -799,7 +805,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
           <svg
             viewBox={`0 0 ${g.W} ${g.H}`}
             width="100%"
-            role="img"
+            role="group"
             aria-label={model.summary}
             className="block h-auto max-h-[520px] w-full select-none"
             onPointerDown={(e) => {
@@ -869,7 +875,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
             })}
 
             {/* hub */}
-            <g className="tc-pop">
+            <g className="tc-pop" aria-hidden="true">
               <circle cx={g.cx} cy={g.cy} r={g.hubR + 4} fill="none" stroke={OLIVE} strokeOpacity={0.25} />
               <circle cx={g.cx} cy={g.cy} r={g.hubR} fill={OLIVE} />
               <circle cx={g.cx} cy={g.cy} r={g.hubR - 4} fill="none" stroke={PAPER} strokeOpacity={0.16} />
@@ -894,6 +900,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
             </g>
             {layout.tags && (
               <text
+                aria-hidden="true"
                 className="tc-fade fill-muted stroke-card"
                 fontSize={layout.tags.fs}
                 fontWeight={500}
@@ -909,12 +916,17 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
               </text>
             )}
 
-            {/* stars */}
+            {/* stars: each one is focusable and named in full (keyboard focus shows the full label, like hover) */}
             {layout.nodes.map((nd) => (
               <g
                 key={`n-${nd.key}`}
-                className="tc-dim"
+                className="tc-dim tc-star"
                 opacity={dimFor(nd)}
+                role="img"
+                aria-label={nd.ariaLabel}
+                tabIndex={0}
+                onFocus={() => setActive(nd.key)}
+                onBlur={() => setActive((cur) => (cur === nd.key ? null : cur))}
                 onPointerEnter={onEnter(nd.key)}
                 onPointerLeave={onLeave}
                 onPointerDown={onTap(nd.key)}
@@ -929,7 +941,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
                     <circle cx={nd.x} cy={nd.y} r={nd.r} fill={nd.color} className="stroke-card" strokeWidth={1.5} />
                   )}
                   {activeNode?.key === nd.key && (
-                    <circle cx={nd.x} cy={nd.y} r={nd.r + 3} fill="none" stroke={nd.color} strokeWidth={1.2} />
+                    <circle className="tc-ring" cx={nd.x} cy={nd.y} r={nd.r + 3} fill="none" stroke={nd.color} strokeWidth={1.2} />
                   )}
                 </g>
               </g>
@@ -939,6 +951,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
             {layout.ticks.map((t) => (
               <text
                 key={`t-${t.text}`}
+                aria-hidden="true"
                 x={t.x}
                 y={t.y}
                 textAnchor="middle"
@@ -962,6 +975,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
                 paintOrder: "stroke",
                 strokeLinejoin: "round" as const,
                 className: "tc-fade fill-ink-2 stroke-card",
+                "aria-hidden": true,
               };
               return s.title.kind === "arc" ? (
                 <text key={`s-${s.domain}`} {...common} textAnchor="middle">
@@ -981,7 +995,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
               nd.label &&
               nd.labelBox &&
               (!activeNode || (activeNode.key !== nd.key && !boxesOverlap(nd.labelBox, activeNode.focusBox, 3))) ? (
-                <g key={`lb-${nd.key}`} className="tc-dim" opacity={dimFor(nd)}>
+                <g key={`lb-${nd.key}`} aria-hidden="true" className="tc-dim" opacity={dimFor(nd)}>
                   <text
                     x={nd.label.x}
                     y={nd.label.y}
@@ -1012,6 +1026,7 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
             {/* focused star: full name + score, drawn last so it sits on top */}
             {activeNode && (
               <text
+                aria-hidden="true"
                 x={activeNode.focus.x}
                 y={activeNode.focus.y}
                 textAnchor={activeNode.focus.anchor}
@@ -1048,25 +1063,9 @@ export default function TasteConstellation({ center, domains }: TasteConstellati
             hollow = ranked, no score
           </span>
         )}
-        <span className="sm:ml-auto">Hover or tap a star for details</span>
+        <span className="sm:ml-auto">Hover, tap or tab to a star for details</span>
       </figcaption>
 
-      <ul className="sr-only">
-        {model.sectors.map((s) => (
-          <li key={s.domain}>
-            {s.label}
-            <ul>
-              {s.nodes.map((nd) => (
-                <li key={nd.key}>
-                  {nd.name}
-                  {nd.entity.subtitle ? ` (${nd.entity.subtitle})` : ""}
-                  {nd.score !== null ? `: affinity ${nd.score} out of 100` : ": affinity not scored"}
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
     </figure>
   );
 }
