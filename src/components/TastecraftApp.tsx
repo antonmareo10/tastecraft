@@ -152,13 +152,14 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
             {!started && (
               <div className="mt-7 flex max-w-xl items-center gap-5 rounded-2xl border border-line bg-card p-4 sm:p-5">
                 <div className="shrink-0 text-center">
-                  <div className="font-display text-5xl leading-none text-olive tabular-nums">×2.44</div>
-                  <div className="mt-1 text-[11px] text-muted">vs ×0.91 without Qloo</div>
+                  <div className="font-display text-5xl leading-none text-olive tabular-nums">×1.15</div>
+                  <div className="mt-1 text-[11px] text-muted">vs ×0.90 without Qloo</div>
                 </div>
                 <p className="text-[13px] leading-snug text-ink-2">
-                  <span className="font-semibold text-ink">Measured crowd lift.</span> Given Qloo’s crowd-vs-city contrast,
-                  the same model suggests dishes that the restaurants this crowd loves serve 2.44× as often as the city’s
-                  most popular ones; on its own, 0.91×. 8 restaurants in 8 cities ·{" "}
+                  <span className="font-semibold text-ink">Crowd lift, measured on restaurants the model never saw.</span> Given
+                  Qloo’s crowd-vs-city contrast from half of each city’s restaurants, the same model suggests dishes that the
+                  other half’s crowd favourites serve 1.15× as often as the city’s most popular ones; on its own, 0.90×. 8
+                  restaurants in 8 cities, 5 random splits ·{" "}
                   <a
                     href="https://github.com/antonmareo10/tastecraft/blob/main/eval/SUMMARY.md"
                     target="_blank"
