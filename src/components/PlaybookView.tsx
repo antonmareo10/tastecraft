@@ -756,7 +756,7 @@ function MatchNote({
 
 function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: string; subtitle: string }) {
   return (
-    <header id={id} className="scroll-mt-8 pt-6">
+    <header id={id} className="scroll-mt-6 pt-8">
       <InViewGroup amount={0.5} className="flex items-center gap-3">
         <p className="font-display shrink-0 text-sm text-terracotta-ink">Act {n}</p>
         <span aria-hidden className="bar-fill h-px flex-1 bg-line" />

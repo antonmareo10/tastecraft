@@ -13,7 +13,7 @@ export function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** Scrolls the page so `el` sits `offset` px below the top of the viewport. */
+/** Scrolls the page so `el` sits `offset` px (plus its CSS scroll-margin-top, as Lenis does) below the top of the viewport. */
 export function scrollToElement(el: HTMLElement, offset = 0) {
   if (lenis) {
     // The page may have just grown (a run starting); measure it again so the target is not clamped.
@@ -21,6 +21,7 @@ export function scrollToElement(el: HTMLElement, offset = 0) {
     lenis.scrollTo(el, { offset: -offset, duration: 1.1 });
     return;
   }
-  const top = el.getBoundingClientRect().top + window.scrollY - offset;
+  const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+  const top = el.getBoundingClientRect().top + window.scrollY - offset - margin;
   window.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });
 }
