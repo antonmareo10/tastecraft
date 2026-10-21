@@ -359,7 +359,12 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
             ev.tool === "taste_map" && ev.summary?.startsWith("Hotspots: ")
               ? `Hotspots: ${[...new Set(ev.summary.slice(10).split(", "))].join(", ")}`
               : ev.summary?.replace(/^1 concerts /, "1 concert ");
-          step.entities = ev.entities;
+          // For the restaurant search, show the pick and only the runner-ups Qloo tags as restaurants
+          // (older recordings carry no tag: they show the pick alone, not the landmarks a city search returns).
+          step.entities =
+            ev.tool === "find_restaurant"
+              ? ev.entities?.filter((e, i) => i === 0 || (e as { is_restaurant?: boolean }).is_restaurant === true)
+              : ev.entities;
         }
         if (ev.domain && ev.entities?.length && !ev.error) {
           live.dna[ev.domain] = mergeEntities(live.dna[ev.domain], ev.entities);

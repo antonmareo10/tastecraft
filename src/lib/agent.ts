@@ -239,7 +239,10 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           summary: selected
             ? `${how}: ${selected.name}${selected.subtitle ? ` · ${selected.subtitle}` : ""}${resolution.status === "ambiguous" ? " (other candidates fit too)" : ""}`
             : "No match found",
-          entities: selected ? [selected, ...matches.filter((m) => m.entity_id !== selected.entity_id)].slice(0, 3) : [],
+          // The pick plus the runner-up restaurants the owner can switch to, not the landmarks a city search returns.
+          entities: selected
+            ? [selected, ...resolution.alternatives.flatMap((a) => matches.filter((m) => m.entity_id === a.entity_id))].slice(0, 3)
+            : [],
         });
         return JSON.stringify({
           selected_entity_id: selected?.entity_id ?? null,
@@ -258,6 +261,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
             price_level: m.price_level,
             rating: m.rating,
             popularity: m.popularity,
+            is_restaurant: m.is_restaurant,
             tags: m.all_tags.slice(0, 15),
           })),
         });

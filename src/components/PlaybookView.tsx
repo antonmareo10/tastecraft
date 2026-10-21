@@ -639,14 +639,19 @@ function MatchNote({
   onPick?: (alt: Alternative) => void;
 }) {
   const unsure = resolution.status !== "resolved";
+  // The call to action only appears where the owner can act on it (a live run with candidates to
+  // pick from); a replay just states the match.
   const alts = onPick && !running ? resolution.alternatives : [];
+  const weakName = resolution.match === "close" || resolution.match === "best_guess";
   return (
     <div className="no-print mt-3 text-xs text-paper/85">
       <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className={`rounded-full px-2 py-0.5 ${unsure ? "bg-saffron/90 text-ink" : "border border-paper/30"}`}>
+        <span className={`rounded-full px-2 py-0.5 ${weakName ? "bg-saffron/90 text-ink" : "border border-paper/30"}`}>
           Qloo match: {MATCH_LABEL[resolution.match]}
         </span>
-        {unsure && <span>Other places could fit this name. Check it is yours.</span>}
+        {unsure && alts.length > 0 && (
+          <span>{weakName ? "Qloo has no place with exactly this name. Check it is yours." : "Another place in Qloo has this exact name. Check it is yours."}</span>
+        )}
       </p>
       {alts.length > 0 && (
         <details className="mt-2" open={unsure}>

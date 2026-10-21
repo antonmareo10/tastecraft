@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { resolveRestaurant, type RestaurantMatch } from "@/lib/qloo-tasks";
+import { isRestaurant, resolveRestaurant, type RestaurantMatch } from "@/lib/qloo-tasks";
 
-const place = (entity_id: string, name: string, subtitle?: string): RestaurantMatch => ({
+const place = (entity_id: string, name: string, subtitle?: string, is_restaurant?: boolean): RestaurantMatch => ({
   entity_id,
   name,
   subtitle,
   all_tags: [],
+  is_restaurant,
 });
 
 describe("resolveRestaurant", () => {
@@ -63,5 +64,30 @@ describe("resolveRestaurant", () => {
     ], "J2");
     expect(selected?.entity_id).toBe("J2");
     expect(resolution).toMatchObject({ status: "resolved", match: "owner_confirmed" });
+  });
+
+  it("offers the most plausible restaurants as alternatives, not the landmarks a city search returns", () => {
+    // Qloo's search for "Gjelina Los Angeles" returns city landmarks first; the name-only search adds the restaurants.
+    const { selected, resolution } = resolveRestaurant("Gjelina", "Los Angeles", [
+      place("LACC", "Los Angeles Convention Center", "1201 S Figueroa St Los Angeles, CA", false),
+      place("ZOO", "Los Angeles Zoo", "5333 Zoo Dr Los Angeles, CA", false),
+      place("G", "Gjelina", "1429 Abbot Kinney Blvd Venice, CA", true),
+      place("TA", "Gjelina Take Away", "1427 Abbot Kinney Blvd Venice, CA", true),
+      place("NY", "Gjelina", "45 Bond St New York, NY", true),
+    ]);
+    expect(selected?.entity_id).toBe("G");
+    expect(resolution).toMatchObject({ status: "ambiguous", match: "exact" });
+    expect(resolution.alternatives.map((a) => a.entity_id)).toEqual(["NY", "TA"]);
+  });
+});
+
+describe("isRestaurant", () => {
+  it("reads the restaurant genre, cuisine or menu tags, and says nothing without tags", () => {
+    expect(isRestaurant([{ id: "urn:tag:genre:place:restaurant:american", type: "urn:tag:genre:place" }])).toBe(true);
+    expect(isRestaurant([{ id: "urn:tag:genre:place:restaurant", type: "urn:tag:genre:place" }])).toBe(true);
+    expect(isRestaurant([{ id: "urn:tag:specialty_dish:place:pastrami", type: "urn:tag:specialty_dish:place" }])).toBe(true);
+    expect(isRestaurant([{ id: "urn:tag:genre:place:museum", type: "urn:tag:genre:place" }, { id: "urn:tag:amenity:qloo:cafe", type: "urn:tag:amenity:qloo" }])).toBe(false);
+    expect(isRestaurant([])).toBeUndefined();
+    expect(isRestaurant(undefined)).toBeUndefined();
   });
 });
