@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "/",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Tastecraft home page: Know what your neighborhood is hungry for." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Tastecraft home page: Know who loves your restaurant, and what they crave." }],
   },
   twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.png"] },
 };
