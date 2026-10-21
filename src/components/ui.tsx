@@ -114,7 +114,7 @@ export function Pill({ children, tone = "plain" }: { children: ReactNode; tone?:
   const tones = {
     plain: "border-line bg-paper text-ink-2",
     olive: "border-olive/25 bg-olive/10 text-olive",
-    terracotta: "border-terracotta/25 bg-terracotta/10 text-terracotta",
+    terracotta: "border-terracotta/25 bg-terracotta/10 text-terracotta-ink",
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${tones[tone]}`}>

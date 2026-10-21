@@ -409,7 +409,7 @@ export default function PlaybookView({
                             </span>
                           </>
                         }
-                        className={`relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${mv.lift >= 1 ? "bg-olive/10 text-olive" : "bg-terracotta/10 text-terracotta"}`}
+                        className={`relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${mv.lift >= 1 ? "bg-olive/10 text-olive" : "bg-terracotta/10 text-terracotta-ink"}`}
                       >
                         <ul className="space-y-1.5">
                           {(mv.lift_terms ?? []).map((t) => (
@@ -573,7 +573,7 @@ function FanMatch({ value }: { value: number }) {
 
 const DIRECTION: Record<TrendLine["direction"], { label: string; tone: string; stroke: string }> = {
   rising: { label: "Rising", tone: "border-olive/25 bg-olive/10 text-olive", stroke: "var(--olive)" },
-  falling: { label: "Falling", tone: "border-terracotta/25 bg-terracotta/10 text-terracotta", stroke: "var(--terracotta)" },
+  falling: { label: "Falling", tone: "border-terracotta/25 bg-terracotta/10 text-terracotta-ink", stroke: "var(--terracotta)" },
   steady: { label: "Steady", tone: "border-line bg-paper text-ink-2", stroke: "var(--muted)" },
   no_data: { label: "No data", tone: "border-line bg-paper text-muted", stroke: "var(--muted)" },
 };
@@ -732,7 +732,7 @@ function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: s
   return (
     <header id={id} className="scroll-mt-20 pt-6">
       <InViewGroup amount={0.5} className="flex items-center gap-3">
-        <p className="font-display shrink-0 text-sm text-terracotta">Act {n}</p>
+        <p className="font-display shrink-0 text-sm text-terracotta-ink">Act {n}</p>
         <span aria-hidden className="bar-fill h-px flex-1 bg-line" />
       </InViewGroup>
       <KineticText as="h2" trigger="view" text={title} className="font-display mt-1 text-3xl leading-tight sm:text-4xl" />
@@ -959,7 +959,7 @@ function WeekPlan({ playbook: p }: { playbook: Playbook }) {
       <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((it, i) => (
           <li key={`${it.day}-${i}`} className="lift rounded-xl border border-line bg-paper/50 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-terracotta">{it.day}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-terracotta-ink">{it.day}</p>
             <p className="mt-1 text-sm leading-snug">{it.action}</p>
             <p className="mt-1 text-[12px] text-muted">{it.owner}</p>
           </li>
@@ -1122,7 +1122,7 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
     <Section icon={<IconSpark size={16} />} kicker="Why taste data matters" title="Generic AI vs. Tastecraft">
       {cl?.score != null && generic?.score != null && (
         <p className="mb-3 text-[13px] leading-snug text-ink-2">
-          Same crowd-lift formula on both sets of dishes: <span className="font-semibold text-terracotta">{liftLabel(generic.score)}</span> without
+          Same crowd-lift formula on both sets of dishes: <span className="font-semibold text-terracotta-ink">{liftLabel(generic.score)}</span> without
           Qloo vs <span className="font-semibold text-olive">{liftLabel(cl.score)}</span> with Qloo (×1.0 = no different from {cl.city}’s
           most popular restaurants).{" "}
           <HowLink label="How is crowd lift measured?" title="Crowd lift">

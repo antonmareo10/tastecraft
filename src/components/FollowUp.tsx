@@ -163,7 +163,7 @@ export default function FollowUp({
               </ul>
             )}
             {t.error && (
-              <p role="alert" className="mt-3 text-sm text-terracotta">
+              <p role="alert" className="mt-3 text-sm text-terracotta-ink">
                 {t.error}
               </p>
             )}

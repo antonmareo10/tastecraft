@@ -60,7 +60,7 @@ export default function ReplayCards({
             disabled={disabled}
             className="lift group flex h-full w-full min-w-0 flex-col rounded-xl border border-line bg-paper/60 p-3 text-left hover:border-olive/35 hover:bg-card active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
           >
-            <span className="flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-terracotta">
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-terracotta-ink">
               <span className="rec-dot" aria-hidden />
               Recorded run
             </span>

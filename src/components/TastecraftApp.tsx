@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
@@ -7,9 +8,8 @@ import type { AgentEvent, AgentRequest } from "@/lib/types";
 import { readNdjson } from "@/lib/ndjson";
 import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
 import { scrollToElement } from "@/lib/scroll";
-import Timeline, { type Step, type TimelineItem } from "./Timeline";
-import PlaybookView, { type LiveState } from "./PlaybookView";
-import FollowUp from "./FollowUp";
+import type { Step, TimelineItem } from "./Timeline";
+import type { LiveState } from "./PlaybookView";
 import HeroLight from "./HeroLight";
 import ReplayCards, { type DemoSummary } from "./ReplayCards";
 import { CountUp, KineticText, MagneticButton, Reveal } from "./fx";
@@ -42,6 +42,20 @@ const CREDITS = [
 
 const HEADLINE = "Know who loves your restaurant, and what they crave.";
 
+// The agent's workspace (log, playbook, constellation, share images, follow-up) is only needed once a
+// run starts, so it loads on demand: warmed as soon as the visitor reaches for the form or a replay.
+const loadTimeline = () => import("./Timeline");
+const loadPlaybook = () => import("./PlaybookView");
+const loadFollowUp = () => import("./FollowUp");
+const Timeline = dynamic(loadTimeline, { loading: () => <div className="shimmer h-64 rounded-2xl border border-line bg-card" /> });
+const PlaybookView = dynamic(loadPlaybook, { loading: () => <SkeletonCards /> });
+const FollowUp = dynamic(loadFollowUp);
+const warmWorkspace = () => {
+  void loadTimeline();
+  void loadPlaybook();
+  void loadFollowUp();
+};
+
 type Phase = "idle" | "running" | "done" | "error";
 
 const timestamp = () => Date.now();
@@ -70,6 +84,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
 
   async function run(req: AgentRequest, demo?: DemoSummary) {
     if (!req.restaurant.trim() || !req.city.trim()) return;
+    warmWorkspace();
     setReplay(demo ?? null);
     setLogOpen(false);
     abortRef.current?.abort();
@@ -126,6 +141,11 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
   return (
     <div className="relative isolate flex min-h-screen flex-col overflow-x-clip">
       <HeroLight className="absolute inset-x-0 top-0 -z-10 h-[760px] w-full sm:h-[880px]" />
+      {/* The resting light where the cursor one is off (touch screens, reduced motion): plain CSS. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-[38%] top-0 -z-10 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(221,154,46,0.17),rgba(192,83,44,0.05)_45%,transparent_68%)] [@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:hidden"
+      />
 
       <header className="no-print mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
         <Link href="/" className="group flex items-center gap-2.5 pointer-coarse:min-h-11" aria-label="Tastecraft home">
@@ -145,10 +165,13 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-20 sm:px-6">
         <section
+          onPointerOver={warmWorkspace}
+          onFocusCapture={warmWorkspace}
+          onTouchStartCapture={warmWorkspace}
           className={`no-print grid gap-10 ${started ? "py-4" : "py-10 sm:py-16"} lg:grid-cols-[1.1fr_1fr] lg:items-center`}
         >
           <div>
-            <p className="fade-up text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta">For independent restaurants</p>
+            <p className="fade-up text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta-ink">For independent restaurants</p>
             <KineticText
               as="h1"
               text={HEADLINE}
@@ -373,7 +396,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                       <IconAlert size={17} />
                     </span>
                     <div className="min-w-0">
-                      <p className="font-semibold text-terracotta">The agent hit a problem</p>
+                      <p className="font-semibold text-terracotta-ink">The agent hit a problem</p>
                       <p className="mt-1 text-ink-2">{error}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button

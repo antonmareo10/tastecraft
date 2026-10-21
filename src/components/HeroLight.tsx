@@ -43,7 +43,8 @@ export default function HeroLight({ className }: { className?: string }) {
     let h = 0;
     let dots: Dot[] = [];
     let edges: [number, number][] = [];
-    const light = { x: 0, y: 0, tx: 0, ty: 0, a: interactive ? 0 : 1, ta: 1 };
+    // Where the light never moves, a CSS glow in the page stands in for it (see TastecraftApp).
+    const light = { x: 0, y: 0, tx: 0, ty: 0, a: 0, ta: interactive ? 1 : 0 };
     let raf = 0;
     let visible = true;
     let built = false;
@@ -55,7 +56,8 @@ export default function HeroLight({ className }: { className?: string }) {
       w = rect.width;
       h = rect.height;
       if (!w || !h) return;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      // Faint dots and hairlines need no retina canvas: cap the resolution (cheaper to clear and draw).
+      const dpr = Math.min(interactive ? 1.5 : 1, window.devicePixelRatio || 1);
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -108,28 +110,57 @@ export default function HeroLight({ className }: { className?: string }) {
       return d >= rad ? 0 : light.a * (1 - d / rad) ** 2;
     };
 
+    // Everything outside the light is drawn in a handful of batched paths (one per colour); only the
+    // few dots and links inside the light get their own alpha.
     const draw = () => {
       ctx.clearRect(0, 0, w, h);
       const rad = radius();
-      const g = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, rad);
-      g.addColorStop(0, `rgba(221,154,46,${0.22 * light.a})`);
-      g.addColorStop(0.5, `rgba(192,83,44,${0.07 * light.a})`);
-      g.addColorStop(1, "rgba(221,154,46,0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(light.x - rad, light.y - rad, rad * 2, rad * 2);
+      if (light.a > 0.01) {
+        const g = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, rad);
+        g.addColorStop(0, `rgba(221,154,46,${0.22 * light.a})`);
+        g.addColorStop(0.5, `rgba(192,83,44,${0.07 * light.a})`);
+        g.addColorStop(1, "rgba(221,154,46,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(light.x - rad, light.y - rad, rad * 2, rad * 2);
+      }
       ctx.lineWidth = 1;
+      const litEdges: [Dot, Dot, number][] = [];
+      ctx.strokeStyle = "rgba(47,74,53,0.045)";
+      ctx.beginPath();
       for (const [i, j] of edges) {
         const a = dots[i];
         const b = dots[j];
         const k = glow((a.x + b.x) / 2, (a.y + b.y) / 2);
+        if (k > 0.01) litEdges.push([a, b, k]);
+        else {
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+        }
+      }
+      ctx.stroke();
+      for (const [a, b, k] of litEdges) {
         ctx.strokeStyle = `rgba(47,74,53,${0.045 + k * 0.34})`;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
-      for (const d of dots) {
-        const k = glow(d.x, d.y);
+      const litDots: [Dot, number][] = [];
+      for (const [color] of COLORS) {
+        ctx.fillStyle = `rgba(${color},0.15)`;
+        ctx.beginPath();
+        for (const d of dots) {
+          if (d.c !== color) continue;
+          const k = glow(d.x, d.y);
+          if (k > 0.01) litDots.push([d, k]);
+          else {
+            ctx.moveTo(d.x + d.r, d.y);
+            ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+          }
+        }
+        ctx.fill();
+      }
+      for (const [d, k] of litDots) {
         ctx.fillStyle = `rgba(${d.c},${0.15 + k * 0.62})`;
         ctx.beginPath();
         ctx.arc(d.x, d.y, d.r + k * 1.8, 0, Math.PI * 2);
@@ -177,24 +208,37 @@ export default function HeroLight({ className }: { className?: string }) {
       if (visible) kick();
     });
 
-    // Start after the page is interactive: the graph is decoration and must not compete with it.
+    // Start once the page is idle: the graph is decoration and must not compete with loading. On touch
+    // screens and with reduced motion, where it never moves, it waits until the page has settled.
     const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 200));
     const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
-    const handle = idle(() => {
-      build();
-      draw();
-      canvas.dataset.ready = "";
-      ro.observe(canvas);
-      io.observe(canvas);
-      if (interactive) {
-        window.addEventListener("pointermove", onMove, { passive: true });
-        document.documentElement.addEventListener("pointerleave", onLeave);
-        kick(); // fades the light in
-      }
-    });
+    let handle = 0;
+    let timer = 0;
+    const start = () => {
+      handle = idle(() => {
+        build();
+        draw();
+        canvas.dataset.ready = "";
+        ro.observe(canvas);
+        io.observe(canvas);
+        if (interactive) {
+          window.addEventListener("pointermove", onMove, { passive: true });
+          document.documentElement.addEventListener("pointerleave", onLeave);
+          kick(); // fades the light in
+        }
+      });
+    };
+    const settled = () => {
+      timer = window.setTimeout(start, 2500);
+    };
+    if (interactive) start();
+    else if (document.readyState === "complete") settled();
+    else window.addEventListener("load", settled, { once: true });
 
     return () => {
       cancelIdle(handle);
+      window.clearTimeout(timer);
+      window.removeEventListener("load", settled);
       cancelAnimationFrame(raf);
       cancelAnimationFrame(resizeRaf);
       ro.disconnect();

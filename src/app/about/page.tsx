@@ -29,7 +29,7 @@ export default function About() {
       </Link>
 
       <header className="mt-8">
-        <p className="fade-up text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta">About</p>
+        <p className="fade-up text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta-ink">About</p>
         <KineticText
           as="h1"
           text="The cultural intelligence chains buy, for the restaurants that can’t."

@@ -11,6 +11,7 @@
   --olive: #2f4a35;
   --olive-2: #46684d;
   --terracotta: #c0532c;
+  --terracotta-ink: #a8431f; /* terracotta for small text: 5.3:1 on --paper (the fill colour is 4.1:1) */
   --saffron: #dd9a2e;
   --plum: #6b3b5a;
   /* One motion language: entrances ease out on this curve (see src/lib/motion.ts). */
@@ -29,6 +30,7 @@
   --color-olive: var(--olive);
   --color-olive-2: var(--olive-2);
   --color-terracotta: var(--terracotta);
+  --color-terracotta-ink: var(--terracotta-ink);
   --color-saffron: var(--saffron);
   --color-plum: var(--plum);
   --font-sans: var(--font-inter);
@@ -164,44 +166,81 @@ body {
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
-/* "Recorded run" tag: a calm breathing dot. */
+/* "Recorded run" tag: a calm breathing dot. Rings grow with transform and fade with opacity only. */
 .rec-dot {
+  position: relative;
   display: inline-block;
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: var(--terracotta);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--terracotta) 45%, transparent);
-  animation: ring-pulse 2.4s var(--ease-out) infinite;
+}
+
+.rec-dot::after,
+.ring-pulse::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.rec-dot::after {
+  inset: 0;
+  background: var(--terracotta);
+  animation: ring-out 2.4s var(--ease-out) infinite;
 }
 
 /* The agent's active step. */
 .ring-pulse {
-  animation: ring-pulse 1.8s var(--ease-out) infinite;
+  position: relative;
 }
 
-@keyframes ring-pulse {
+.ring-pulse::after {
+  inset: -1px;
+  border: 2px solid color-mix(in srgb, var(--terracotta) 45%, transparent);
+  animation: ring-out 1.8s var(--ease-out) infinite;
+}
+
+@keyframes ring-out {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--terracotta) 40%, transparent);
+    opacity: 0.5;
+    transform: scale(1);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--terracotta) 0%, transparent);
+    opacity: 0;
+    transform: scale(2.2);
   }
 }
 
-/* Cards with a little depth under the cursor (hover devices only). */
+/* Cards with a little depth under the cursor (hover devices only): the card rises with transform and
+   its shadow, painted once on a pseudo-element, fades in with opacity. */
+.lift {
+  position: relative;
+}
+
 @media (hover: hover) {
   .lift {
     transition:
       transform 0.35s var(--ease-out),
-      box-shadow 0.35s var(--ease-out),
       border-color 0.2s ease,
       background-color 0.2s ease;
   }
+  .lift::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 16px 32px -22px rgba(29, 27, 23, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s var(--ease-out);
+  }
   .lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 16px 32px -22px rgba(29, 27, 23, 0.42);
+  }
+  .lift:hover::after {
+    opacity: 1;
   }
 }
 
@@ -328,8 +367,8 @@ body {
   .rise,
   .pulse-dot,
   .fade-up,
-  .rec-dot,
-  .ring-pulse,
+  .rec-dot::after,
+  .ring-pulse::after,
   .shimmer::after,
   .marquee-track,
   .squiggle path,
@@ -360,7 +399,8 @@ body {
     opacity: 0;
   }
   .lift,
-  .lift:hover {
+  .lift:hover,
+  .lift::after {
     transform: none;
     transition: none;
   }
