@@ -31,7 +31,7 @@ type Term = { term: string; crowd?: number };
  * in the first group. Used before displayMenuTerms() so that a 4-vs-0 term is never the first thing
  * shown when better-supported terms exist.
  */
-export function supportedFirst<T extends { crowd?: number; city?: number }>(terms: readonly T[]): T[] {
+export function supportedFirst<T extends { term: string; crowd?: number; city?: number }>(terms: readonly T[]): T[] {
   const low = (t: T) => typeof t.crowd === "number" && typeof t.city === "number" && isLowCount({ crowd: t.crowd, city: t.city });
   return [...terms.filter((t) => !low(t)), ...terms.filter(low)];
 }
