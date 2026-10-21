@@ -128,25 +128,24 @@ function formatNumber(v: number, decimals: number, grouping: boolean): string {
 }
 
 /**
- * Counts up to the real value the first time it is seen. The final value is what the server
- * renders, what screen readers get and what reserves the width (no layout shift); only the
- * visible digits tick. `skipAfterMs` leaves a server-rendered number alone if it was already on
- * screen and the page took longer than that to hydrate, so a slow load never shows it jump back.
+ * A number that is right in every frame. The final value is what the server renders, what screen
+ * readers get and what any still frame shows (a screenshot, a paused video, a slow device); the
+ * first time it scrolls into view it only rises into place, it never counts through wrong values.
+ * `skipAfterMs` leaves a server-rendered number alone if it was already on screen and the page took
+ * longer than that to hydrate, so a slow load never shows it blink. Reduced motion: no animation.
  */
-export function CountUp({
+export function NumberReveal({
   value,
-  from = 0,
   decimals = 0,
   prefix = "",
   suffix = "",
   grouping = false,
-  duration = 1100,
+  duration = 700,
   delay = 0,
   skipAfterMs,
   className,
 }: {
   value: number;
-  from?: number;
   decimals?: number;
   prefix?: string;
   suffix?: string;
@@ -172,30 +171,20 @@ export function CountUp({
 
   useEffect(() => {
     const el = digits.current;
-    if (!el || !inView || reduce || skip.current) return;
-    const show = (v: number) => writeText(el, `${prefix}${formatNumber(v, decimals, grouping)}${suffix}`);
-    let raf = 0;
-    let t0 = 0;
-    const tick = (now: number) => {
-      if (!t0) t0 = now + delay;
-      const t = Math.min(1, Math.max(0, (now - t0) / duration));
-      show(from + (value - from) * (1 - Math.pow(1 - t, 4)));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    show(from);
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      show(value);
-    };
-  }, [inView, reduce, value, from, decimals, prefix, suffix, grouping, duration, delay, skipAfterMs]);
+    if (!el || !inView || reduce || skip.current || typeof el.animate !== "function") return;
+    const anim = el.animate(
+      [
+        { opacity: 0, transform: "translateY(0.4em)" },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration, delay, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "backwards" },
+    );
+    return () => anim.cancel();
+  }, [inView, reduce, duration, delay]);
 
   return (
     <span ref={box} className={`inline-grid tabular-nums ${className ?? ""}`}>
-      <span aria-hidden className="invisible col-start-1 row-start-1">
-        {text}
-      </span>
-      <span ref={digits} aria-hidden className="col-start-1 row-start-1">
+      <span ref={digits} aria-hidden className="col-start-1 row-start-1 inline-block">
         {text}
       </span>
       <span className="sr-only">{text}</span>

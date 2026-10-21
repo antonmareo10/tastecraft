@@ -20,7 +20,7 @@ import {
   IconUsers,
 } from "./icons";
 import { AffinityBar, CopyButton, EvidenceLine, HowLink, Pill, Section } from "./ui";
-import { CountUp, InViewGroup, KineticText, Reveal } from "./fx";
+import { InViewGroup, KineticText, NumberReveal, Reveal } from "./fx";
 import { InfoPopover } from "./Popover";
 import SectionNav from "./SectionNav";
 import { toast } from "./Toaster";
@@ -175,7 +175,7 @@ export default function PlaybookView({
                 className="mt-5 inline-flex max-w-xl items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5"
               >
                 <span className="font-display text-4xl leading-none text-paper">
-                  <CountUp value={Math.round(p.crowd_lift.score * 10) / 10} decimals={1} prefix="×" delay={250} />
+                  <NumberReveal value={Math.round(p.crowd_lift.score * 10) / 10} decimals={1} prefix="×" delay={150} />
                 </span>
                 <div className="leading-tight">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Crowd lift</p>
@@ -200,7 +200,7 @@ export default function PlaybookView({
               >
                 <IconCheck size={13} className="mt-px shrink-0" />
                 <span>
-                  <CountUp value={p.verification.verified} delay={400} duration={900} /> of {p.verification.checked} evidence lines check
+                  <NumberReveal value={p.verification.verified} delay={250} /> of {p.verification.checked} evidence lines check
                   out: every Qloo name and score they cite was returned in this run
                   <span aria-hidden className="px-1.5 opacity-60">·</span>
                   <HowLink label="What is checked?" title="What is checked" tone="dark">

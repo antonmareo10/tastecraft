@@ -14,7 +14,7 @@ import type { Step, TimelineItem } from "./Timeline";
 import type { LiveState } from "./PlaybookView";
 import HeroLight from "./HeroLight";
 import ReplayCards, { type DemoSummary } from "./ReplayCards";
-import { CountUp, KineticText, MagneticButton, Reveal } from "./fx";
+import { KineticText, MagneticButton, Reveal } from "./fx";
 import { IconAlert, IconArrow } from "./icons";
 
 export type { DemoSummary };
@@ -200,11 +200,12 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                 style={{ "--d": "560ms" } as React.CSSProperties}
               >
                 <div className="shrink-0 text-center">
-                  <div className="font-display text-5xl leading-none text-olive">
-                    <CountUp value={1.15} decimals={2} prefix="×" delay={500} duration={1300} skipAfterMs={1600} />
+                  {/* Final values from the server, revealed by CSS from the first paint: no frame ever shows a wrong number. */}
+                  <div className="fade-up font-display text-5xl leading-none tabular-nums text-olive" style={{ "--d": "760ms" } as React.CSSProperties}>
+                    ×1.15
                   </div>
                   <div className="mt-1 text-[11px] text-muted">
-                    vs <CountUp value={0.9} decimals={2} prefix="×" delay={500} duration={1300} skipAfterMs={1600} /> without Qloo
+                    vs <span className="tabular-nums">×0.90</span> without Qloo
                   </div>
                 </div>
                 <p className="text-[13px] leading-snug text-ink-2">

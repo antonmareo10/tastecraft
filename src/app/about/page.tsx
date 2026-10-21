@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CountUp, KineticText, Reveal } from "@/components/fx";
+import { KineticText, NumberReveal, Reveal } from "@/components/fx";
 
 export const metadata: Metadata = {
   title: "About · Tastecraft",
@@ -39,19 +39,19 @@ export default function About() {
 
       <section className="mt-12 grid gap-4 sm:grid-cols-3">
         <Stat
-          value={<CountUp value={412498} grouping duration={1400} />}
+          value={<NumberReveal value={412498} grouping />}
           label="independent restaurants left in the US at the end of 2025"
           href={SOURCES.technomic}
           index={0}
         />
         <Stat
-          value={<CountUp value={2.3} decimals={1} prefix="−" suffix="%" duration={1200} />}
+          value={<NumberReveal value={2.3} decimals={1} prefix="−" suffix="%" delay={80} />}
           label="independents lost in 2025 — about 9,500 closures — while chains grew 1.4%"
           href={SOURCES.nrn}
           index={1}
         />
         <Stat
-          value={<CountUp value={7} suffix=" in 10" duration={1000} />}
+          value={<NumberReveal value={7} suffix=" in 10" delay={160} />}
           label="US restaurants are single-unit operations, with no insight team"
           href={SOURCES.nra}
           index={2}
