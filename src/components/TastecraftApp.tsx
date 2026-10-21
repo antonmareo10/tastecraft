@@ -37,6 +37,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
   const [replay, setReplay] = useState<DemoSummary | null>(null);
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(0);
+  const [logOpen, setLogOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
 
@@ -53,6 +54,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
   async function run(req: AgentRequest, demo?: DemoSummary) {
     if (!req.restaurant.trim() || !req.city.trim()) return;
     setReplay(demo ?? null);
+    setLogOpen(false);
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -88,7 +90,17 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
     }
   }
 
+  function playDemo(d: DemoSummary) {
+    const req = { restaurant: d.restaurant, city: d.city, goal: d.goal };
+    setForm(req);
+    run(req, d);
+  }
+
   const started = phase !== "idle";
+  // On phones the agent log sits above the playbook; once the run is over it folds into one line so
+  // the playbook's headline comes first. Desktop keeps it open in the sidebar.
+  const logFolded = phase === "done" && !logOpen;
+  const stepCount = items.filter((i) => i.kind === "step").length;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -119,6 +131,24 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
               restaurant and turns it into menu moves, events, local marketing and a supplier shopping list, with the
               evidence behind every call.
             </p>
+            {/* Phones: the replay buttons in the form are a screen and a half down, so offer them here too. */}
+            {!started && demos.length > 0 && (
+              <div className="mt-5 lg:hidden">
+                <p className="text-[13px] font-medium text-ink">Watch a real recorded run, replayed in about 15 seconds:</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {demos.map((d) => (
+                    <button
+                      key={d.slug}
+                      type="button"
+                      onClick={() => playDemo(d)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-olive/30 bg-olive/5 px-3 py-1.5 text-[13px] font-medium text-olive transition hover:bg-olive/10"
+                    >
+                      {d.restaurant} <IconArrow size={12} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {!started && (
               <div className="mt-7 flex max-w-xl items-center gap-5 rounded-2xl border border-line bg-card p-4 sm:p-5">
                 <div className="shrink-0 text-center">
@@ -228,9 +258,10 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                   key={s.restaurant}
                   type="button"
                   onClick={() => {
+                    if ("slug" in s) return playDemo(s);
                     const req = { restaurant: s.restaurant, city: s.city, goal: s.goal };
                     setForm(req);
-                    run(req, "slug" in s ? s : undefined);
+                    run(req);
                   }}
                   disabled={phase === "running"}
                   className="inline-flex items-center gap-1 text-ink-2 underline decoration-line underline-offset-4 hover:text-ink hover:decoration-ink-2"
@@ -253,7 +284,27 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
           {started && (
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
               <div className="no-print min-w-0 lg:sticky lg:top-4">
-                <Timeline items={items} running={phase === "running"} elapsedMs={elapsed} />
+                {logFolded && (
+                  <button
+                    type="button"
+                    onClick={() => setLogOpen(true)}
+                    aria-expanded={false}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3 text-left lg:hidden"
+                  >
+                    <span>
+                      <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Agent log</span>
+                      <span className="block text-sm text-ink-2">
+                        {stepCount} steps in {(elapsed / 1000).toFixed(0)} s · show how Tastecraft got here
+                      </span>
+                    </span>
+                    <span aria-hidden className="text-lg leading-none text-ink-2">
+                      +
+                    </span>
+                  </button>
+                )}
+                <div className={logFolded ? "hidden lg:block" : undefined}>
+                  <Timeline items={items} running={phase === "running"} elapsedMs={elapsed} />
+                </div>
               </div>
               <div className="min-w-0">
                 {replay && (
@@ -283,10 +334,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                             <button
                               key={d.slug}
                               type="button"
-                              onClick={() => {
-                                setForm({ restaurant: d.restaurant, city: d.city, goal: d.goal });
-                                run({ restaurant: d.restaurant, city: d.city, goal: d.goal }, d);
-                              }}
+                              onClick={() => playDemo(d)}
                               className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink"
                             >
                               {d.restaurant} →
@@ -376,7 +424,7 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         live.resolution = ev.resolution;
         break;
       case "heatmap":
-        // Older recordings can name the same neighbourhood twice: keep the strongest one per name.
+        // Older recordings can name the same neighborhood twice: keep the strongest one per name.
         live.heatmap = { cells: ev.cells, zones: ev.zones.filter((z, i, all) => all.findIndex((x) => x.label === z.label) === i), center: ev.center };
         break;
       case "baseline":

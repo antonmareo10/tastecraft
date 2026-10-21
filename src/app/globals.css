@@ -6,7 +6,7 @@
   --card: #fffdf8;
   --ink: #1d1b17;
   --ink-2: #4a4539;
-  --muted: #8a8273;
+  --muted: #6b6456; /* 5.2:1 on --paper, 4.8:1 on --paper-2 (WCAG AA for small text) */
   --line: #e2d8c4;
   --olive: #2f4a35;
   --olive-2: #46684d;

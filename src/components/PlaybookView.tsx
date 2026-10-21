@@ -155,13 +155,22 @@ export default function PlaybookView({
       )}
 
       {p && !running && (
-        <nav aria-label="Playbook sections" className="no-print sticky top-2 z-[1100] flex flex-wrap gap-2 rounded-full border border-line bg-card/90 p-1.5 backdrop-blur">
+        // One compact row: it scrolls sideways on narrow phones instead of wrapping, and its solid
+        // background keeps the content passing underneath from showing through.
+        <nav
+          aria-label="Playbook sections"
+          className="no-print sticky top-2 z-[1100] flex w-fit max-w-full flex-nowrap gap-1 overflow-x-auto whitespace-nowrap rounded-full border border-line bg-card p-1 shadow-[0_6px_18px_-12px_rgba(29,27,23,0.45)] [scrollbar-width:none]"
+        >
           {[
             ["act-read", "1 · Read the room"],
             ["act-moves", "2 · The moves"],
             ["act-premiere", "3 · Opening night"],
           ].map(([id, label]) => (
-            <a key={id} href={`#${id}`} className="rounded-full px-3 py-1 text-[13px] text-ink-2 transition hover:bg-paper hover:text-ink">
+            <a
+              key={id}
+              href={`#${id}`}
+              className="shrink-0 rounded-full px-2.5 py-1 text-[12.5px] text-ink-2 transition hover:bg-paper hover:text-ink sm:px-3 sm:text-[13px]"
+            >
               {label}
             </a>
           ))}
@@ -886,7 +895,25 @@ function ShoppingList({ playbook: p }: { playbook: Playbook }) {
         </div>
       }
     >
-      <div className="overflow-x-auto">
+      {/* Phones: one card per item, since four columns do not fit a 390 px screen. */}
+      <ul className="space-y-2 sm:hidden">
+        {p.shopping_list.map((i) => (
+          <li key={`${i.item}-${i.supplier_category}`} className="rounded-xl border border-line bg-paper/50 px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="min-w-0 text-sm font-medium leading-snug">{i.item}</p>
+              <p className="shrink-0 text-sm tabular-nums">{money(i.est_cost, p.currency)}</p>
+            </div>
+            <p className="mt-0.5 text-[12px] leading-snug text-ink-2">
+              {i.qty} {i.unit} · {i.supplier_category}
+            </p>
+          </li>
+        ))}
+        <li className="flex items-baseline justify-between gap-3 px-3 pt-1">
+          <span className="text-xs uppercase tracking-[0.12em] text-muted">Estimated total</span>
+          <span className="font-semibold tabular-nums">{money(total, p.currency)}</span>
+        </li>
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-[520px] text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.12em] text-muted">
