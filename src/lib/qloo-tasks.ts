@@ -340,13 +340,15 @@ const NON_TASTE_TYPE = /^urn:tag:(payments|credit_card|parking|accessibility|age
 
 export type GapTag = { tag: string; crowd: number; city: number; crowd_pct: number; city_pct: number; lift: number; examples: string[] };
 
-export async function tasteGaps(opts: {
-  restaurant: RestaurantMatch;
-  city: string;
-  lens?: Lens;
-}): Promise<{ gaps: GapTag[]; sampled: EntityRef[]; menu: ReturnType<typeof rankTerms>; crowd_n: number; city_n: number }> {
-  const data = await crowdAndCity({ entityId: opts.restaurant.entity_id, city: opts.city, lens: opts.lens });
-  const own = new Set(opts.restaurant.all_tags.map((t) => t.toLowerCase()));
+export type CrowdContrast = { gaps: GapTag[]; sampled: EntityRef[]; menu: ReturnType<typeof rankTerms>; crowd_n: number; city_n: number };
+
+export async function tasteGaps(opts: { restaurant: RestaurantMatch; city: string; lens?: Lens }): Promise<CrowdContrast> {
+  return crowdContrast(await crowdAndCity({ entityId: opts.restaurant.entity_id, city: opts.city, lens: opts.lens }), opts.restaurant);
+}
+
+/** The crowd-vs-city contrast of two restaurant sets (pure, so the benchmark can also run it on a subset of each set). */
+export function crowdContrast(data: CrowdData, restaurant: Pick<RestaurantMatch, "all_tags">): CrowdContrast {
+  const own = new Set(restaurant.all_tags.map((t) => t.toLowerCase()));
   const tagsOf = (e: RawEntity) =>
     new Set(
       ((e.tags ?? []) as RawTag[])
@@ -386,7 +388,7 @@ export async function tasteGaps(opts: {
   return {
     gaps,
     sampled: data.crowd.slice(0, 12).map((e) => toEntityRef(e)),
-    menu: rankTerms(sets, { own: opts.restaurant.all_tags }),
+    menu: rankTerms(sets, { own: restaurant.all_tags }),
     crowd_n: nA,
     city_n: nB,
   };
