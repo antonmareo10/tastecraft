@@ -26,6 +26,9 @@ export type RestaurantMatch = EntityRef & {
   price_level?: number;
   rating?: number;
   all_tags: string[];
+  // true when Qloo tags the place as a restaurant (restaurant genre, cuisine or menu tags); false when it
+  // has tags and none of them say so (a museum, an airport); undefined when it has no tags at all.
+  is_restaurant?: boolean;
 };
 
 export async function findRestaurant(name: string, city: string): Promise<RestaurantMatch[]> {
@@ -83,21 +86,28 @@ export function resolveRestaurant(
   matches: RestaurantMatch[],
   preferredId?: string,
 ): { selected: RestaurantMatch | null; resolution: Resolution } {
+  if (!matches.length) return { selected: null, resolution: { status: "not_found", match: "best_guess", alternatives: [] } };
+  const cityKey = plain(city);
+  const inCity = (m: RestaurantMatch) => (cityKey ? plain(m.subtitle ?? "").includes(cityKey) : false);
+  // Name first, then the requested city, then places Qloo tags as restaurants, then Qloo's own order.
+  const ranked = matches
+    .map((m, i) => ({ m, name: nameScore(name, m.name), city: inCity(m), food: m.is_restaurant !== false, i }))
+    .sort(
+      (a, b) =>
+        b.name * 2 + Number(b.city) - (a.name * 2 + Number(a.city)) || Number(b.food) - Number(a.food) || a.i - b.i,
+    );
+  // The candidates offered as "Not your restaurant?": the next most plausible ones, without the
+  // landmarks a city-wide search also returns (places Qloo does not tag as restaurants).
   const others = (sel: RestaurantMatch) =>
-    matches
-      .filter((m) => m.entity_id !== sel.entity_id)
+    ranked
+      .map((r) => r.m)
+      .filter((m) => m.entity_id !== sel.entity_id && m.is_restaurant !== false)
       .slice(0, 4)
       .map((m) => ({ entity_id: m.entity_id, name: m.name, subtitle: m.subtitle }));
-  if (!matches.length) return { selected: null, resolution: { status: "not_found", match: "best_guess", alternatives: [] } };
   const preferred = preferredId ? matches.find((m) => m.entity_id === preferredId) : undefined;
   if (preferred) {
     return { selected: preferred, resolution: { status: "resolved", match: "owner_confirmed", alternatives: others(preferred) } };
   }
-  const cityKey = plain(city);
-  const inCity = (m: RestaurantMatch) => (cityKey ? plain(m.subtitle ?? "").includes(cityKey) : false);
-  const ranked = matches
-    .map((m, i) => ({ m, name: nameScore(name, m.name), city: inCity(m), i }))
-    .sort((a, b) => b.name * 2 + Number(b.city) - (a.name * 2 + Number(a.city)) || a.i - b.i);
   const [top, second] = ranked;
   const match: Resolution["match"] = top.name === 3 ? "exact" : top.name === 2 ? "close" : "best_guess";
   const tie = second != null && second.name === top.name && second.city === top.city;
@@ -105,6 +115,14 @@ export function resolveRestaurant(
     selected: top.m,
     resolution: { status: match === "exact" && !tie ? "resolved" : "ambiguous", match, alternatives: others(top.m) },
   };
+}
+
+// A place is a restaurant for Qloo when it carries the restaurant genre (urn:tag:genre:place:restaurant
+// or a sub-genre), a cuisine or menu tags. Landmarks returned by a city-wide search carry none of them.
+const FOOD_TAG_TYPE = /^urn:tag:(cuisine:qloo|specialty_dish:place|menu_highlight:qloo)$/;
+export function isRestaurant(tags: RawTag[] | undefined): boolean | undefined {
+  if (!tags?.length) return undefined;
+  return tags.some((t) => /^urn:tag:genre:place:restaurant(:|$)/.test(String(t.id ?? t.tag_id ?? "")) || FOOD_TAG_TYPE.test(String(t.type ?? "")));
 }
 
 function toRestaurantMatch(e: RawEntity): RestaurantMatch {
@@ -117,6 +135,7 @@ function toRestaurantMatch(e: RawEntity): RestaurantMatch {
     price_level: typeof e.properties?.price_level === "number" ? e.properties.price_level : undefined,
     rating: typeof e.properties?.business_rating === "number" ? e.properties.business_rating : undefined,
     all_tags: (e.tags ?? []).map(tagName).filter(Boolean),
+    is_restaurant: isRestaurant(e.tags),
   };
 }
 
@@ -321,13 +340,15 @@ const NON_TASTE_TYPE = /^urn:tag:(payments|credit_card|parking|accessibility|age
 
 export type GapTag = { tag: string; crowd: number; city: number; crowd_pct: number; city_pct: number; lift: number; examples: string[] };
 
-export async function tasteGaps(opts: {
-  restaurant: RestaurantMatch;
-  city: string;
-  lens?: Lens;
-}): Promise<{ gaps: GapTag[]; sampled: EntityRef[]; menu: ReturnType<typeof rankTerms>; crowd_n: number; city_n: number }> {
-  const data = await crowdAndCity({ entityId: opts.restaurant.entity_id, city: opts.city, lens: opts.lens });
-  const own = new Set(opts.restaurant.all_tags.map((t) => t.toLowerCase()));
+export type CrowdContrast = { gaps: GapTag[]; sampled: EntityRef[]; menu: ReturnType<typeof rankTerms>; crowd_n: number; city_n: number };
+
+export async function tasteGaps(opts: { restaurant: RestaurantMatch; city: string; lens?: Lens }): Promise<CrowdContrast> {
+  return crowdContrast(await crowdAndCity({ entityId: opts.restaurant.entity_id, city: opts.city, lens: opts.lens }), opts.restaurant);
+}
+
+/** The crowd-vs-city contrast of two restaurant sets (pure, so the benchmark can also run it on a subset of each set). */
+export function crowdContrast(data: CrowdData, restaurant: Pick<RestaurantMatch, "all_tags">): CrowdContrast {
+  const own = new Set(restaurant.all_tags.map((t) => t.toLowerCase()));
   const tagsOf = (e: RawEntity) =>
     new Set(
       ((e.tags ?? []) as RawTag[])
@@ -367,7 +388,7 @@ export async function tasteGaps(opts: {
   return {
     gaps,
     sampled: data.crowd.slice(0, 12).map((e) => toEntityRef(e)),
-    menu: rankTerms(sets, { own: opts.restaurant.all_tags }),
+    menu: rankTerms(sets, { own: restaurant.all_tags }),
     crowd_n: nA,
     city_n: nB,
   };
@@ -473,7 +494,7 @@ export async function nameZones(cells: HeatCell[]): Promise<Zone[]> {
       }
       placeNameCache.set(key, label);
     }
-    // Several hot cells often fall in the same neighbourhood: keep the strongest one per name.
+    // Several hot cells often fall in the same neighborhood: keep the strongest one per name.
     if (!zones.some((z) => z.label === label)) zones.push({ label, lat: c.lat, lon: c.lon, affinity: c.affinity });
   }
   return zones;

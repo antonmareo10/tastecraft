@@ -5,7 +5,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-// A full playbook run costs roughly US$0.5 of Claude usage (measured, see README), so the default
+// A full playbook run costs about US$0.3-0.4 of Claude usage (measured from token counts, see README), so the default
 // daily cap is deliberately small; raise LIVE_RUNS_DAILY_CAP when the API balance allows.
 const PER_IP_PER_HOUR = Number(process.env.LIVE_RUNS_PER_IP_PER_HOUR || 3);
 const DAILY_CAP = Number(process.env.LIVE_RUNS_DAILY_CAP || 8);

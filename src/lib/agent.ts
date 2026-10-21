@@ -59,7 +59,7 @@ Rules for the playbook:
 - Write evidence the way you would tell an owner, not an analyst: "Vermouth scores 95/100 with your crowd", "4 of the 10 places your guests love most serve natural wine (e.g. X, Y)". Never expose internal field names such as weighted_score, share_of_loved_places_pct or entity ids.
 - Be specific to this restaurant, this city and the owner's goal. Avoid generic advice that any restaurant could get.
 - Menu moves must be realistic for the restaurant's kitchen and price level. Prices and costs are in the local currency.
-- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Use taste_gaps to see what this crowd favours over the city (lift above 1) or avoids (below 1), and weigh it together with the restaurant's identity and kitchen: a good menu move is something this restaurant can credibly serve that its crowd over-indexes on, not a copy of another place's menu. When you use these shares, quote them in the evidence, e.g. on 11% of the menus at your guests' favourite places vs 2% citywide.
+- High taste_tags affinity alone often just means "popular everywhere" (fries, tiramisu). Use taste_gaps to see what this crowd favours over the city (lift above 1) or avoids (below 1), and weigh it together with the restaurant's identity and kitchen: a good menu move is something this restaurant can credibly serve that its crowd over-indexes on, not a copy of another place's menu. When you use these shares, quote them in the evidence, e.g. on 11% of the menus at your guests' favourite places vs 2% at the city's most popular restaurants. Never call the city set 'citywide' or 'across the city': it is the city's ~150 most popular restaurants in Qloo, not every restaurant.
 - Give each dish a plain, descriptive menu name.
 - Inside playbook text fields never put words in double quotes (use single quotes or none): the playbook is streamed as JSON and an unescaped double quote breaks it.
 - The shopping list covers the ingredients for testing the three menu moves for one week in a small restaurant (realistic quantities, supplier categories such as produce, meat, fish, dairy, dry goods, drinks).
@@ -239,7 +239,10 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
           summary: selected
             ? `${how}: ${selected.name}${selected.subtitle ? ` · ${selected.subtitle}` : ""}${resolution.status === "ambiguous" ? " (other candidates fit too)" : ""}`
             : "No match found",
-          entities: selected ? [selected, ...matches.filter((m) => m.entity_id !== selected.entity_id)].slice(0, 3) : [],
+          // The pick plus the runner-up restaurants the owner can switch to, not the landmarks a city search returns.
+          entities: selected
+            ? [selected, ...resolution.alternatives.flatMap((a) => matches.filter((m) => m.entity_id === a.entity_id))].slice(0, 3)
+            : [],
         });
         return JSON.stringify({
           selected_entity_id: selected?.entity_id ?? null,
@@ -258,6 +261,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
             price_level: m.price_level,
             rating: m.rating,
             popularity: m.popularity,
+            is_restaurant: m.is_restaurant,
             tags: m.all_tags.slice(0, 15),
           })),
         });

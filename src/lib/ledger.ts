@@ -1,5 +1,5 @@
-// Evidence ledger: every fact Qloo returned during a run, so the server can verify each
-// claim in the playbook against what the API actually said (not what the model remembers).
+// Evidence ledger: every name and number Qloo returned during a run, so the server can check the
+// names and scores each piece of evidence cites against what the API actually said (not what the model remembers).
 
 import type { Evidence } from "./types";
 

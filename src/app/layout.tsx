@@ -9,10 +9,24 @@ const fraunces = Fraunces({
   axes: ["SOFT", "opsz"],
 });
 
+const TITLE = "Tastecraft · the taste data team for independent restaurants";
+const DESCRIPTION =
+  "An AI agent that reads Qloo's taste graph around your restaurant and turns it into menu moves, events, local marketing and a supplier shopping list, with the evidence behind every call.";
+
 export const metadata: Metadata = {
-  title: "Tastecraft · the taste data team for independent restaurants",
-  description:
-    "An AI agent that reads Qloo's taste graph around your restaurant and turns it into menu moves, events, local marketing and a supplier shopping list, with the evidence behind every call.",
+  metadataBase: new URL("https://tastecraft-xi.vercel.app"),
+  title: TITLE,
+  description: DESCRIPTION,
+  // Link previews (Devpost, Slack, social): the home page's hero, rendered from the app itself.
+  openGraph: {
+    type: "website",
+    siteName: "Tastecraft",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Tastecraft home page: Know what your neighborhood is hungry for." }],
+  },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.png"] },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

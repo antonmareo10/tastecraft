@@ -75,14 +75,14 @@ GET /v2/insights?filter.type=urn:entity:place&filter.tags=urn:tag:genre:place:re
 GET /v2/insights?filter.type=urn:heatmap&signal.interests.entities=<RESTAURANT_ID>&filter.location.query=<city>
 ```
 
-- **Used for:** the taste map. Geohash cells are decoded locally and the top distinct hotspots are named with OpenStreetMap (Nominatim) reverse geocoding. These become the target neighbourhoods for the local campaign.
+- **Used for:** the taste map. Geohash cells are decoded locally and the top distinct hotspots are named with OpenStreetMap (Nominatim) reverse geocoding. These become the target neighborhoods for the local campaign.
 
 ## 8. From results to a playbook
 
 1. Every name and score that Qloo returned in this run is recorded in an **evidence ledger** on the server.
 2. Claude writes the playbook through a schema-validated `publish_playbook` tool call. Every evidence line must list the exact names and scores it relies on. If the streamed JSON is malformed, the last step is retried once with server-validated input.
-3. The server checks each cited name and score against the ledger (±1 on scores) and marks it **verified** (✓) or **not verified** (⚠) before the owner sees it. The header reports how many cited facts were verified.
-4. The server computes the **crowd lift** of the three dishes from their names and the two restaurant sets of step 6, and the same score for the dishes of the same model's answer without Qloo. The model never writes these numbers.
+3. The server checks each cited name and score against the ledger (±1 on scores) and marks the evidence line **verified** (✓) or **not verified** (⚠) before the owner sees it. The header reports how many evidence lines passed. Other numbers in the prose, such as menu shares, are not checked.
+4. The server computes the **crowd lift** of the three dishes from their names and the two restaurant sets of step 6 (the restaurants with menu tags in Qloo), and the same score for the dishes of a quick answer from the same model without Qloo. The model never writes these numbers. Because the agent saw the same contrast in step 6, this per-playbook score is descriptive; [eval/SUMMARY.md](../eval/SUMMARY.md) has a held-out check that scores dishes on restaurants the model was not shown.
 5. The UI keeps the layers apart: **Qloo evidence** (facts, with their check marks), the crowd lift (computed), and **Our read** (Tastecraft's interpretation, framed as bets to test).
 
 ## Failure handling

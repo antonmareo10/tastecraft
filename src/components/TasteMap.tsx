@@ -1,7 +1,8 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { CircleMarker, MapContainer, Rectangle, TileLayer, Tooltip } from "react-leaflet";
+import { useEffect } from "react";
+import { CircleMarker, MapContainer, Rectangle, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { HeatCell, Zone } from "@/lib/types";
 
 // Warm sequential ramp (paper -> saffron -> terracotta -> plum) for affinity 0..1.
@@ -25,6 +26,31 @@ function heatColor(a: number): string {
   return "rgb(107, 59, 90)";
 }
 
+type Bounds = [[number, number], [number, number]];
+
+/** The box around the restaurant and the named hotspots: what the owner needs to see, not the whole metro heatmap. */
+function focusBounds(points: [number, number][]): Bounds | null {
+  const pts = points.filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+  if (pts.length < 2) return null;
+  return [
+    [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1]))],
+    [Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))],
+  ];
+}
+
+// MapContainer only reads its view props once (and ignores bounds when a zoom is given), so the
+// view is fitted here, again whenever the restaurant or the hotspots change.
+function FitView({ bounds, center }: { bounds: Bounds | null; center: [number, number] }) {
+  const map = useMap();
+  const key = JSON.stringify(bounds ?? center);
+  useEffect(() => {
+    const view = JSON.parse(key) as Bounds | [number, number];
+    if (Array.isArray(view[0])) map.fitBounds(view as Bounds, { padding: [36, 36], maxZoom: 14 });
+    else map.setView(view as [number, number], 12);
+  }, [map, key]);
+  return null;
+}
+
 export default function TasteMap({
   cells,
   zones,
@@ -36,24 +62,19 @@ export default function TasteMap({
   center: [number, number];
   restaurant?: { name: string; lat?: number; lon?: number };
 }) {
-  const bounds: [[number, number], [number, number]] | undefined = cells.length
-    ? [
-        [Math.min(...cells.map((c) => c.bbox[0])), Math.min(...cells.map((c) => c.bbox[1]))],
-        [Math.max(...cells.map((c) => c.bbox[2])), Math.max(...cells.map((c) => c.bbox[3]))],
-      ]
-    : undefined;
+  const here: [number, number][] = restaurant?.lat != null && restaurant?.lon != null ? [[restaurant.lat, restaurant.lon]] : [];
+  const bounds = focusBounds([...here, ...zones.map((z): [number, number] => [z.lat, z.lon])]);
   return (
     <div className="overflow-hidden rounded-xl border border-line">
       <MapContainer
         center={center}
         zoom={12}
-        bounds={bounds}
-        boundsOptions={{ padding: [24, 24] }}
         scrollWheelZoom={false}
         style={{ height: 380, width: "100%" }}
         attributionControl
         className="taste-map"
       >
+        <FitView bounds={bounds} center={center} />
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

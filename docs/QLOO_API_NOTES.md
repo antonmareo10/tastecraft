@@ -36,7 +36,7 @@ Source: docs.qloo.com (reference + recipes), read 2026-10-16. Hackathon guide pa
   - It spells the game type `videogame`; the hackathon guide spells it `video_game`.
   - Prefer the hackathon spelling and fall back to the other on 403.
 - Other `filter.type` values documented on use-case pages: `urn:heatmap`, `urn:demographics`, `urn:tag`.
-  - None of them is in the hackathon list, so hackathon availability is UNKNOWN.
+  - None of them is in the hackathon list, but all three work on the hackathon key: Tastecraft calls them on every run (see 7.7–7.9).
   - A 403 means the type isn't supported.
 - `/search` `types` accepts the same enum plus legacy search-only `urn:entity:actor|album|author|director|locality`.
 - Entity ID = uppercase UUID string, e.g. `FCE8B172-4795-43E4-B222-3B550DC05FD9` (Balthazar NYC).
@@ -265,7 +265,7 @@ Field notes:
   - `production_companies[]`, `release_country[]`, `filming_location`, `websites[]`.
 - Place `properties` nesting is UNKNOWN beyond `properties.geocode.{name, city, metro, admin1_region, admin2_region, country_code}` (from filter descriptions).
   - The Schema & Taxonomy page only shows a **flattened** place view with these fields: `address`, `city`, `admin1_region`, `admin2_region`, `country`, `country_code`, `metro`, `neighborhood`, `lat`, `lon`, `phone`, `website`, `menu_url`, `business_rating`, `price_level` (1–4), `currency`, `price_range.from|to`, `hotel_class`, `number_of_rooms`, `is_closed`, `description`, `short_description`, `url` (image).
-  - The real paths, e.g. `properties.address` or `location.lat`: UNKNOWN; log a live response.
+  - In /search and insights responses Tastecraft reads `properties.address`, `properties.price_level`, `properties.business_rating`, `properties.image.url` and `location.lat|lon` (`toRestaurantMatch` and `toEntityRef` in src/lib/qloo-tasks.ts and src/lib/qloo.ts; they fall back to `properties.geocode` for coordinates).
 - Top-level `query` echo:
   - `query.locality.signal` holds the matched locality for `*.location.query`.
   - `query.entities.signal` / `query.entities.exclude` are for the POST `.query` params.
@@ -287,7 +287,10 @@ Field notes:
 - Cold start: `filter.popularity.min=0.9&filter.location.query=...` (no signal; affinity is null).
 - Destination requires `signal.interests.entities` (Entity Type guide).
 
-### 7.7 Heatmap (`filter.type=urn:heatmap`; hackathon availability UNKNOWN)
+### 7.7 Heatmap (`filter.type=urn:heatmap`; works on the hackathon key)
+
+- Used by Tastecraft's taste map: `filter.type=urn:heatmap&signal.interests.entities=<PLACE_ID>&filter.location.query=<city>` (`tasteHeatmap` in src/lib/qloo-tasks.ts).
+- It returns `results.heatmap[]`, one geohash cell per row with an affinity (the code accepts `location.geohash` or `geohash`, and `query.affinity`, `query.affinity_rank` or `affinity`). Without `take`, recorded runs got 535 to 1,072 cells per city.
 
 - Required:
   - One of `filter.location.query` (e.g. `NYC`) or `filter.location` (WKT/locality UUID).
@@ -317,9 +320,11 @@ Field meanings:
 - `popularity`: the cell's signal-density percentile.
 - Geohash length varies: examples show 6 (`dr5wct`) and 7 (`dr5rsj6`) characters, from dynamic density.
 - The MUJI example returned `affinity: 0, popularity: 0` with no `affinity_rank`, so treat every field as optional.
-- The default and max `take` for heatmaps are UNKNOWN.
+- The max `take` for heatmaps is UNKNOWN; the default already returns hundreds of cells per city (see above).
 
-### 7.8 Demographics (`filter.type=urn:demographics`; hackathon availability UNKNOWN)
+### 7.8 Demographics (`filter.type=urn:demographics`; works on the hackathon key)
+
+- Used by Tastecraft's audience profile with `signal.interests.entities=<PLACE_ID>` (`audienceDemographics` in src/lib/qloo-tasks.ts); the response matches the shape below.
 
 - Request: `signal.interests.entities=<ID>` and/or `signal.interests.tags=<TAG>`.
 - Response has one block per input:
@@ -332,7 +337,9 @@ Field meanings:
 - Positive = over-indexes, negative = under-indexes. The numeric range is UNKNOWN (examples fall within about −0.53 to 0.7).
 - For a tag input, `entity_id` holds the tag URN.
 
-### 7.9 Taste analysis (`filter.type=urn:tag`; hackathon availability UNKNOWN)
+### 7.9 Taste analysis (`filter.type=urn:tag`; works on the hackathon key)
+
+- Used by Tastecraft's taste tags (`tasteTags` in src/lib/qloo-tasks.ts: `filter.tag.types` = a tag family, `signal.interests.entities`, `signal.location.query`) and by the benchmark's affinity check (`filter.results.tags`); the response matches the shape below.
 
 - Inputs: one or more of `signal.interests.entities`, `signal.interests.tags`, `signal.demographics.audiences`, `signal.location(.query)`, `filter.tag.types`, `filter.parents.types` (e.g. `urn:entity:movie,urn:entity:tv_show`).
 - Output params: `take`, `offset`, `diversify.by=subtype` + `diversify.take`.
@@ -390,10 +397,9 @@ Field meanings:
 
 ## 10. UNKNOWN / to verify live
 
-- The exact raw nesting of place fields (address, lat/lon, price_level, business_rating, hours) in insights and /search responses.
+- Place fields beyond the ones the code reads (see section 7 above), e.g. opening hours.
 - The exact JSON shape of explainability.
-- `output.heatmap.boundary` values for city and neighborhood, and where heatmap dimension columns go in the response.
-- Whether `urn:heatmap`, `urn:demographics` and `urn:tag` work on hackathon keys.
+- `output.heatmap.boundary` values for city and neighborhood, and where heatmap dimension columns go in the response (Tastecraft uses the default geohash cells and no dimensions).
 - Which spelling works: `urn:entity:video_game` or `videogame`.
 - The demographics score range.
 - The default `take` for /search. Pagination for /entities. Response shapes for /v2/tags/types and /v2/audiences/types.

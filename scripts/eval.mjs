@@ -129,7 +129,7 @@ Run on ${new Date().toISOString().slice(0, 10)} over ${ok.length} restaurants ($
 | Evidence (1-10) | ${avg((r) => r.judge.generic.evidence).toFixed(1)} | ${avg((r) => r.judge.grounded.evidence).toFixed(1)} |
 | Actionability (1-10) | ${avg((r) => r.judge.generic.actionability).toFixed(1)} | ${avg((r) => r.judge.grounded.actionability).toFixed(1)} |
 | Preferred overall | ${ok.filter((r) => !r.judge.groundedWins).length} / ${ok.length} | ${ok.filter((r) => r.judge.groundedWins).length} / ${ok.length} |
-| Cited facts verified against live Qloo responses | n/a | ${verified} / ${checked} (${checked ? Math.round((verified / checked) * 100) : 0}%) |
+| Evidence lines whose cited Qloo names and scores match the run's live responses | n/a | ${verified} / ${checked} (${checked ? Math.round((verified / checked) * 100) : 0}%) |
 | Avg. run time | — | ${Math.round(avg((r) => r.seconds))} s |
 
 Raw per-restaurant results contain Qloo-derived data and are kept out of the public repository.
