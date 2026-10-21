@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rankTerms, type MenuPlace } from "@/lib/lift";
-import { displayMenuTerms, favoursSummary, isMenuFragment } from "@/lib/menu-terms";
+import { displayMenuTerms, favoursSummary, isMenuFragment, supportedFirst } from "@/lib/menu-terms";
 
 // Synthetic terms and counts (no recorded Qloo data).
 const t = (term: string, crowd = 4, city = 0, lift = 3.1) => ({ term, crowd, city, lift });
@@ -77,7 +77,26 @@ describe("displayMenuTerms", () => {
   });
 });
 
+describe("supportedFirst", () => {
+  it("moves low-count terms after the others and keeps each group's order", () => {
+    const list = [t("Acai bowl", 8, 0, 8.6), t("amatriciana", 4, 0, 4.8), t("squash", 14, 2, 4.8), t("Cold brew", 4, 0, 4.8), t("coffee", 8, 1, 4.3)];
+    expect(supportedFirst(list).map((x) => x.term)).toEqual(["Acai bowl", "squash", "coffee", "amatriciana", "Cold brew"]);
+  });
+
+  it("leaves terms without counts in place", () => {
+    const list = [{ term: "Matcha" }, t("pastrami", 3, 1), { term: "oat milk" }];
+    expect(supportedFirst(list).map((x) => x.term)).toEqual(["Matcha", "oat milk", "pastrami"]);
+  });
+});
+
 describe("favoursSummary", () => {
+  it("leads with better-supported terms when the full list is known", () => {
+    const favours = [t("Acai bowl", 8, 0, 8.63), t("amatriciana", 4, 0, 4.8), t("Cold brew", 4, 0, 4.8), t("squash", 14, 2, 4.8), t("coffee", 8, 1, 4.32)];
+    expect(favoursSummary("Your crowd favours: Acai bowl ×8.6, amatriciana ×4.8, Cold brew ×4.8", favours)).toBe(
+      "Your crowd favours: Acai bowl ×8.6, squash ×4.8, coffee ×4.3",
+    );
+  });
+
   it("rebuilds the log line from the top three shown terms of the full list", () => {
     const favours = [t("Poke bowl", 9, 0, 7.12), t("brews", 6, 0, 5.24), t("sole", 6, 0, 5.24), t("carbonara"), t("Dover sole")];
     // "brews" is dropped; "sole" stays because "Dover sole" is not among the three shown.

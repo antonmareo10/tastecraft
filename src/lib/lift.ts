@@ -133,6 +133,21 @@ export function indexMenus(places: MenuPlace[]): Map<string, { count: number; la
   return index;
 }
 
+// Below this many menus (crowd and city counts together) a term's lift rests on a handful of
+// restaurants: 4 vs 0 already reads about x4.8 after smoothing. The UI keeps such numbers but marks
+// them "low count" and never leads with them. The score itself is unchanged.
+export const LOW_COUNT_MENUS = 5;
+
+/** True when a term's lift rests on fewer than LOW_COUNT_MENUS menus in both sets together. */
+export function isLowCount(t: { crowd: number; city: number }): boolean {
+  return t.crowd + t.city < LOW_COUNT_MENUS;
+}
+
+/** True when any matched term of a dish is low count (so the dish's lift leans on a few menus). */
+export function dishLowCount(terms: readonly { crowd: number; city: number }[] | undefined): boolean {
+  return Boolean(terms?.some(isLowCount));
+}
+
 /** Add-one smoothed ratio of shares: (a+1)/(nA+2) divided by (b+1)/(nB+2). 1 = no difference. */
 export function smoothedLift(a: number, nA: number, b: number, nB: number): number {
   if (nA <= 0 || nB <= 0) return 1;

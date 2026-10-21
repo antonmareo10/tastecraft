@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   crowdLiftOf,
   dishHead,
+  dishLowCount,
   dishTerms,
   foodTokens,
   indexMenus,
+  isLowCount,
+  LOW_COUNT_MENUS,
   parseBaselineDishes,
   planLift,
   rankTerms,
@@ -81,6 +84,23 @@ describe("smoothedLift", () => {
     expect(smoothedLift(3, 4, 1, 4)).toBeCloseTo(2); // (4/6) / (2/6)
     expect(smoothedLift(0, 100, 0, 100)).toBe(1); // seen nowhere = no difference
     expect(smoothedLift(5, 0, 1, 10)).toBe(1); // no data = no claim
+  });
+});
+
+describe("low count", () => {
+  it("marks a term on fewer than 5 menus in both sets together", () => {
+    expect(LOW_COUNT_MENUS).toBe(5);
+    expect(isLowCount({ crowd: 4, city: 0 })).toBe(true); // 4 vs 0 reads about x4.8 after smoothing
+    expect(isLowCount({ crowd: 3, city: 1 })).toBe(true);
+    expect(isLowCount({ crowd: 5, city: 0 })).toBe(false);
+    expect(isLowCount({ crowd: 3, city: 2 })).toBe(false);
+  });
+
+  it("marks a dish when any of its matched terms is low count", () => {
+    expect(dishLowCount([{ crowd: 23, city: 23 }, { crowd: 4, city: 0 }])).toBe(true);
+    expect(dishLowCount([{ crowd: 13, city: 3 }, { crowd: 5, city: 2 }])).toBe(false);
+    expect(dishLowCount([])).toBe(false);
+    expect(dishLowCount(undefined)).toBe(false);
   });
 });
 

@@ -21,9 +21,20 @@
 // Format nouns (bowl, board, platter) are not in rule 1, so "Poke bowl" stays; Spanish and Italian
 // adjectives follow the noun, so they are not in rule 1 either ("Patatas fritas" stays).
 
-import { foodTokens } from "./lift";
+import { foodTokens, isLowCount } from "./lift";
 
 type Term = { term: string; crowd?: number };
+
+/**
+ * The same terms with the low-count ones (on fewer than 5 menus in both sets, see lift.ts) moved
+ * after the others, each group keeping its order. A term whose counts are unknown stays where it is
+ * in the first group. Used before displayMenuTerms() so that a 4-vs-0 term is never the first thing
+ * shown when better-supported terms exist.
+ */
+export function supportedFirst<T extends { crowd?: number; city?: number }>(terms: readonly T[]): T[] {
+  const low = (t: T) => typeof t.crowd === "number" && typeof t.city === "number" && isLowCount({ crowd: t.crowd, city: t.city });
+  return [...terms.filter((t) => !low(t)), ...terms.filter(low)];
+}
 
 const TRAILING = new Set(
   (
@@ -91,13 +102,14 @@ const ITEM = /(.+?) ×(\d+(?:\.\d+)?)(?:, |$)/g;
 /**
  * The agent log line for taste_gaps ("Your crowd favours: Poke bowl ×7.1, brews ×5.2, sole ×5.2"),
  * rebuilt from the top three shown terms (rule 4 within those three). With the full list
- * (`favours`) those come from it; without it (lensed calls), from the line's own items.
+ * (`favours`) those come from it, better-supported terms first; without it (lensed calls), from
+ * the line's own items.
  */
-export function favoursSummary(summary: string, favours?: readonly { term: string; crowd?: number; lift: number }[]): string {
+export function favoursSummary(summary: string, favours?: readonly { term: string; crowd?: number; city?: number; lift: number }[]): string {
   const m = SUMMARY.exec(summary);
   if (!m) return summary;
   const items = favours?.length
-    ? displayMenuTerms(favours, 3).map((t) => ({ term: t.term, x: t.lift.toFixed(1) }))
+    ? displayMenuTerms(supportedFirst(favours), 3).map((t) => ({ term: t.term, x: t.lift.toFixed(1) }))
     : displayMenuTerms([...m[1].matchAll(ITEM)].map((x) => ({ term: x[1], x: x[2] })), 3);
   return items.length ? `Your crowd favours: ${items.map((t) => `${t.term} ×${t.x}`).join(", ")}` : summary;
 }
