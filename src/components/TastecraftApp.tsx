@@ -68,6 +68,8 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
   const [phase, setPhase] = useState<Phase>("idle");
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Live runs refused by the demo's caps or paused (HTTP 429/503, or a "paused" message mid-run).
+  const [capped, setCapped] = useState(false);
   const [replay, setReplay] = useState<DemoSummary | null>(null);
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(0);
@@ -95,6 +97,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
     abortRef.current = controller;
     setEvents([]);
     setError(null);
+    setCapped(false);
     setPhase("running");
     const t0 = timestamp();
     setStartedAt(t0);
@@ -114,11 +117,15 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
           });
       if (!res.ok || !res.body) {
         const info = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (res.status === 429 || res.status === 503) setCapped(true);
         throw new Error(info?.error ?? `The agent could not start (${res.status}).`);
       }
       for await (const ev of readNdjson<AgentEvent>(res.body)) {
         setEvents((prev) => [...prev, ev]);
-        if (ev.type === "error") setError(ev.message);
+        if (ev.type === "error") {
+          setError(ev.message);
+          if (/paused|used up/i.test(ev.message)) setCapped(true);
+        }
       }
       setPhase((p) => (p === "running" ? "done" : p));
     } catch (err) {
@@ -405,20 +412,30 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                       <IconAlert size={17} />
                     </span>
                     <div className="min-w-0">
-                      <p className="font-semibold text-terracotta-ink">The agent hit a problem</p>
-                      <p className="mt-1 text-ink-2">{error}</p>
+                      <p className="font-semibold text-terracotta-ink">
+                        {capped ? "Live runs are resting right now" : "The agent hit a problem"}
+                      </p>
+                      {capped && (
+                        <p className="mt-1 text-ink-2">
+                          This public demo caps live runs to protect its budget. Every replay below is a real recorded run and plays
+                          instantly.
+                        </p>
+                      )}
+                      <p className={capped ? "mt-1 text-[12px] text-muted" : "mt-1 text-ink-2"}>{error}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => run(form)}
-                          className="min-h-8 rounded-full border border-ink bg-ink px-3.5 py-1.5 text-xs font-medium text-paper transition hover:bg-olive"
-                        >
-                          Try again
-                        </button>
+                        {!capped && (
+                          <button
+                            type="button"
+                            onClick={() => run(form)}
+                            className="min-h-8 rounded-full border border-ink bg-ink px-3.5 py-1.5 text-xs font-medium text-paper transition hover:bg-olive"
+                          >
+                            Try again
+                          </button>
+                        )}
                         {/* If live mode is down or busy, a judge can still see a real run instantly. */}
                         {demos.length > 0 && (
                           <>
-                            <span className="text-xs text-muted">or watch a recorded real run:</span>
+                            <span className="text-xs text-muted">{capped ? "Watch a recorded real run:" : "or watch a recorded real run:"}</span>
                             {demos.slice(0, 3).map((d) => (
                               <button
                                 key={d.slug}
