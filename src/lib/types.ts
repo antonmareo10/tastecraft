@@ -129,7 +129,8 @@ export type AgentEvent =
   | { type: "demographics"; age: Record<string, number>; gender: Record<string, number> }
   | { type: "taste_tags"; family: "dishes" | "cuisines" | "ambience"; tags: { name: string; affinity?: number }[] }
   // Menu terms this crowd's favourite restaurants carry far more (favours) or less (avoids) often
-  // than the city's most popular ones (see src/lib/lift.ts).
+  // than the city's most popular ones (see src/lib/lift.ts). crowd_n / city_n = the restaurants with
+  // menu data in each set, the denominators of the counts (the same sets as the playbook's crowd lift).
   | { type: "crowd_menu"; city: string; crowd_n: number; city_n: number; favours: TermLift[]; avoids: TermLift[] }
   | { type: "playbook"; playbook: Playbook }
   | { type: "playbook_draft"; draft: Record<string, unknown> }

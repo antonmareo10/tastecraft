@@ -8,7 +8,7 @@ import { matchConcerts } from "./concerts";
 import { EvidenceLedger } from "./ledger";
 import { withLens } from "./lens";
 import { crowdLiftOf, parseBaselineDishes } from "./lift";
-import { displayMenuTerms } from "./menu-terms";
+import { displayMenuTerms, supportedFirst } from "./menu-terms";
 import { QlooError } from "./qloo";
 import type { HarnessError } from "./qloo-harness";
 import {
@@ -357,7 +357,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         return "Error: call find_restaurant first.";
       }
       try {
-        const { gaps, sampled, menu, crowd_n, city_n } = await tasteGaps({ restaurant, city: input.city, lens });
+        const { gaps, sampled, menu, crowd_n, city_n, menu_crowd_n, menu_city_n } = await tasteGaps({ restaurant, city: input.city, lens });
         for (const g of gaps) {
           ledger.record(g.tag, "taste_gaps", g.crowd_pct);
           ledger.record(g.tag, "taste_gaps", g.city_pct);
@@ -371,18 +371,19 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         }
         for (const e of sampled) ledger.record(e.name, "taste_gaps", e.affinity != null ? e.affinity * 100 : null, { affinity: true });
         if (!lens && (menu.over.length || menu.under.length)) {
+          // The counts are over the restaurants with menu data, so those are the denominators shown.
           emit({
             type: "crowd_menu",
             city: input.city,
-            crowd_n,
-            city_n,
+            crowd_n: menu_crowd_n,
+            city_n: menu_city_n,
             favours: menu.over.map(({ term, crowd, city, lift }) => ({ term, crowd, city, lift })),
             avoids: menu.under,
           });
         }
         const pct = (x: number, n: number) => (n ? Math.round((x / n) * 100) : 0);
         // The log line shows readable dish terms only (display filter; the model still gets every term below).
-        const fav = displayMenuTerms(menu.over, 3).map((t) => `${t.term} ×${t.lift.toFixed(1)}`);
+        const fav = displayMenuTerms(supportedFirst(menu.over), 3).map((t) => `${t.term} ×${t.lift.toFixed(1)}`);
         emit({
           type: "tool_end",
           id,

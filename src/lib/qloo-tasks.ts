@@ -340,7 +340,17 @@ const NON_TASTE_TYPE = /^urn:tag:(payments|credit_card|parking|accessibility|age
 
 export type GapTag = { tag: string; crowd: number; city: number; crowd_pct: number; city_pct: number; lift: number; examples: string[] };
 
-export type CrowdContrast = { gaps: GapTag[]; sampled: EntityRef[]; menu: ReturnType<typeof rankTerms>; crowd_n: number; city_n: number };
+// crowd_n / city_n: every place in each set (the denominators of the gap tags); menu_crowd_n /
+// menu_city_n: the places with menu tags (the denominators of the menu terms' counts and lifts).
+export type CrowdContrast = {
+  gaps: GapTag[];
+  sampled: EntityRef[];
+  menu: ReturnType<typeof rankTerms>;
+  crowd_n: number;
+  city_n: number;
+  menu_crowd_n: number;
+  menu_city_n: number;
+};
 
 export async function tasteGaps(opts: { restaurant: RestaurantMatch; city: string; lens?: Lens }): Promise<CrowdContrast> {
   return crowdContrast(await crowdAndCity({ entityId: opts.restaurant.entity_id, city: opts.city, lens: opts.lens }), opts.restaurant);
@@ -391,6 +401,8 @@ export function crowdContrast(data: CrowdData, restaurant: Pick<RestaurantMatch,
     menu: rankTerms(sets, { own: restaurant.all_tags }),
     crowd_n: nA,
     city_n: nB,
+    menu_crowd_n: sets.crowd.length,
+    menu_city_n: sets.city.length,
   };
 }
 
