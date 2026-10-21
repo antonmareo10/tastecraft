@@ -429,7 +429,7 @@ export default function PlaybookView({
                             </span>
                           </>
                         }
-                        className={`relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${
+                        className={`relative inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${
                           low
                             ? "border border-dashed border-ink-2/35 bg-paper text-ink-2"
                             : mv.lift >= 1
@@ -1160,7 +1160,7 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
   const cl = p.crowd_lift;
   const generic = cl?.baseline;
   const event = /^\s*(?:event|evento)\s*[:.-]\s*(.+)$/im.exec(baseline)?.[1];
-  const lowTag = <span className="font-normal text-muted"> · low count</span>;
+  const lowTag = <span className="whitespace-nowrap font-normal text-muted"> · low count</span>;
   return (
     <Section icon={<IconSpark size={16} />} kicker="Why taste data matters" title="The same model, with and without Qloo">
       {cl?.score != null && generic?.score != null && (
