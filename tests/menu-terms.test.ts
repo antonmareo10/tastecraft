@@ -36,6 +36,27 @@ describe("displayMenuTerms", () => {
     expect(displayMenuTerms(list).map((x) => x.term)).toEqual(["Onion rings", "Sweet pepper pizza", "matcha"]);
   });
 
+  it("never hides a term behind a longer term outside the visible rows (the squash case)", () => {
+    // "pumpkin" is strong evidence (14 vs 2); "pumpkin flowers" exists but ranks below the six rows shown.
+    const list = [t("Poke bowl", 8), t("sole", 5), t("pumpkin", 14, 2), t("carbonara"), t("burrata salad"), t("Dover sole"), t("Cold brew"), t("coffee", 8, 1), t("pumpkin flowers", 11, 2)];
+    const shown = displayMenuTerms(list, 6).map((x) => x.term);
+    expect(shown).toContain("pumpkin");
+    expect(shown).not.toContain("pumpkin flowers");
+    // "sole" (5) folds into "Dover sole" (4, at least half), both visible; its row goes to the next term.
+    expect(shown).toEqual(["Poke bowl", "pumpkin", "carbonara", "burrata salad", "Dover sole", "Cold brew"]);
+  });
+
+  it("never hides a strong generic term behind a weak specific one", () => {
+    const list = [t("pumpkin", 14, 2), t("pumpkin soup", 3, 0), t("sole", 5), t("Dover sole", 4)];
+    expect(displayMenuTerms(list, 6).map((x) => x.term)).toEqual(["pumpkin", "pumpkin soup", "Dover sole"]);
+  });
+
+  it("weighs the city count for terms the crowd avoids", () => {
+    const avoids = [t("burger", 1, 27, 0.1), t("double burger", 0, 6, 0.2), t("milkshakes", 0, 8, 0.1), t("smash burger", 0, 20, 0.1)];
+    // "burger" (27 city menus) folds into "smash burger" (20, at least half) but not into "double burger" alone.
+    expect(displayMenuTerms(avoids, 4, (x) => x.city).map((x) => x.term)).toEqual(["double burger", "milkshakes", "smash burger"]);
+  });
+
   it("returns the original rows, so counts and lifts are exactly the ones lift.ts computed", () => {
     const sets: { crowd: MenuPlace[]; city: MenuPlace[] } = {
       crowd: [
@@ -57,10 +78,11 @@ describe("displayMenuTerms", () => {
 });
 
 describe("favoursSummary", () => {
-  it("rebuilds the log line from the shown terms of the full list", () => {
+  it("rebuilds the log line from the top three shown terms of the full list", () => {
     const favours = [t("Poke bowl", 9, 0, 7.12), t("brews", 6, 0, 5.24), t("sole", 6, 0, 5.24), t("carbonara"), t("Dover sole")];
+    // "brews" is dropped; "sole" stays because "Dover sole" is not among the three shown.
     expect(favoursSummary("Your crowd favours: Poke bowl ×7.1, brews ×5.2, sole ×5.2", favours)).toBe(
-      "Your crowd favours: Poke bowl ×7.1, carbonara ×3.1, Dover sole ×3.1",
+      "Your crowd favours: Poke bowl ×7.1, sole ×5.2, carbonara ×3.1",
     );
   });
 

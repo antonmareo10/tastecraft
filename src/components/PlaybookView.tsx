@@ -748,8 +748,8 @@ function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: s
 // the term (olive) against the share of the city's most popular ones (grey), drawn to one scale.
 function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
   // Only terms that read as dishes or foods (src/lib/menu-terms.ts); counts and lifts are unchanged.
-  const rows = displayMenuTerms(data.favours).slice(0, 6);
-  const avoids = displayMenuTerms(data.avoids).slice(0, 4);
+  const rows = displayMenuTerms(data.favours, 6);
+  const avoids = displayMenuTerms(data.avoids, 4, (t) => t.city);
   const share = (n: number, of: number) => (of > 0 ? n / of : 0);
   const top = Math.max(1e-6, ...rows.flatMap((t) => [share(t.crowd, data.crowd_n), share(t.city, data.city_n)]));
   const width = (v: number) => `${(v / top) * 100}%`;

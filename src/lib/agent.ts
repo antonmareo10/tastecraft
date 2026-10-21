@@ -382,7 +382,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         }
         const pct = (x: number, n: number) => (n ? Math.round((x / n) * 100) : 0);
         // The log line shows readable dish terms only (display filter; the model still gets every term below).
-        const fav = displayMenuTerms(menu.over).slice(0, 3).map((t) => `${t.term} ×${t.lift.toFixed(1)}`);
+        const fav = displayMenuTerms(menu.over, 3).map((t) => `${t.term} ×${t.lift.toFixed(1)}`);
         emit({
           type: "tool_end",
           id,

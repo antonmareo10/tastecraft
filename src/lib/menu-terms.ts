@@ -13,15 +13,17 @@
 //   2. A term that starts with a word that only follows another one is the tail of a longer name
 //      ("style tacos", "fired pizza", "Signature bakes").
 //   3. Single words that are not a dish or a food on their own ("gem", "Grandma", "brew").
-//   4. A term whose words all appear, in order, inside a longer term that is shown is folded into
-//      it ("sole" into "Dover sole", "onion" into "Onion rings").
+//   4. A term whose words all appear, in order, inside a longer term that is shown in the same
+//      visible rows is folded into it ("sole" into "Dover sole", "onion" into "Onion rings"), but
+//      only when the longer term has at least half its count: a strong generic term ("squash",
+//      14 places) never disappears behind a weak specific one, nor behind one the reader cannot see.
 //
 // Format nouns (bowl, board, platter) are not in rule 1, so "Poke bowl" stays; Spanish and Italian
 // adjectives follow the noun, so they are not in rule 1 either ("Patatas fritas" stays).
 
 import { foodTokens } from "./lift";
 
-type Term = { term: string };
+type Term = { term: string; crowd?: number };
 
 const TRAILING = new Set(
   (
@@ -54,14 +56,33 @@ const containsRun = (outer: string[], inner: string[]) => {
 };
 
 /**
- * The terms worth showing, in their original order: fragments dropped (rules 1-3), then any term
- * contained in a longer shown term of the same list (rule 4). Objects are returned untouched, so
- * the counts and lifts on screen are the ones computed by lift.ts.
+ * The first `limit` terms worth showing, in their original order: fragments dropped (rules 1-3),
+ * then rule 4 within the visible rows. A folded term frees its row for the next one, so this
+ * repeats until the visible rows are stable. `count` is the evidence that rule 4 weighs (the crowd
+ * count for terms the crowd favours, the city count for terms it avoids); when it is unknown the
+ * fold is allowed. Objects are returned untouched, so the counts and lifts on screen are exactly
+ * the ones computed by lift.ts.
  */
-export function displayMenuTerms<T extends Term>(terms: readonly T[]): T[] {
+export function displayMenuTerms<T extends Term>(
+  terms: readonly T[],
+  limit = Infinity,
+  count: (t: T) => number | undefined = (t) => t.crowd,
+): T[] {
   const kept = terms.filter((t) => !isMenuFragment(t.term));
-  const keys = kept.map((t) => keysOf(t.term));
-  return kept.filter((_, i) => !keys.some((other, j) => j !== i && other.length > keys[i].length && containsRun(other, keys[i])));
+  const keys = new Map(kept.map((t) => [t, keysOf(t.term)] as const));
+  const folded = new Set<T>();
+  const foldsInto = (t: T, o: T) => {
+    const [a, b] = [keys.get(t)!, keys.get(o)!];
+    if (o === t || b.length <= a.length || !containsRun(b, a)) return false;
+    const [ct, co] = [count(t), count(o)];
+    return ct == null || co == null || co >= ct / 2;
+  };
+  for (;;) {
+    const visible = kept.filter((t) => !folded.has(t)).slice(0, limit);
+    const fold = visible.filter((t) => visible.some((o) => foldsInto(t, o)));
+    if (!fold.length) return visible;
+    for (const t of fold) folded.add(t);
+  }
 }
 
 const SUMMARY = /^Your crowd favours: (.+)$/;
@@ -69,14 +90,14 @@ const ITEM = /(.+?) ×(\d+(?:\.\d+)?)(?:, |$)/g;
 
 /**
  * The agent log line for taste_gaps ("Your crowd favours: Poke bowl ×7.1, brews ×5.2, sole ×5.2"),
- * rebuilt from the shown terms. With the full list (`favours`) the top three shown terms are used;
- * without it, the line's own items are filtered.
+ * rebuilt from the top three shown terms (rule 4 within those three). With the full list
+ * (`favours`) those come from it; without it (lensed calls), from the line's own items.
  */
-export function favoursSummary(summary: string, favours?: readonly { term: string; lift: number }[]): string {
+export function favoursSummary(summary: string, favours?: readonly { term: string; crowd?: number; lift: number }[]): string {
   const m = SUMMARY.exec(summary);
   if (!m) return summary;
   const items = favours?.length
-    ? displayMenuTerms(favours).map((t) => ({ term: t.term, x: t.lift.toFixed(1) }))
-    : displayMenuTerms([...m[1].matchAll(ITEM)].map((x) => ({ term: x[1], x: x[2] })));
-  return items.length ? `Your crowd favours: ${items.slice(0, 3).map((t) => `${t.term} ×${t.x}`).join(", ")}` : summary;
+    ? displayMenuTerms(favours, 3).map((t) => ({ term: t.term, x: t.lift.toFixed(1) }))
+    : displayMenuTerms([...m[1].matchAll(ITEM)].map((x) => ({ term: x[1], x: x[2] })), 3);
+  return items.length ? `Your crowd favours: ${items.map((t) => `${t.term} ×${t.x}`).join(", ")}` : summary;
 }
