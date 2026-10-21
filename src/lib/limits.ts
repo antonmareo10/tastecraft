@@ -93,3 +93,19 @@ export function clientIp(request: Request): string {
   const fwd = request.headers.get("x-forwarded-for");
   return (fwd?.split(",")[0] || request.headers.get("x-real-ip") || "local").trim();
 }
+
+// Sliding-window counters for cheap endpoints that still spend the Qloo quota (the MCP taste_profile tool
+// makes ~8 Qloo calls per request and uses no LLM, so the live-run gate above doesn't cover it).
+const hits = new Map<string, number[]>();
+
+/** True (and counted) if `key` made fewer than `max` calls in the last `windowMs`; false otherwise. */
+export function allowCall(key: string, max: number, windowMs: number, now = Date.now()): boolean {
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) {
+    hits.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  hits.set(key, recent);
+  return true;
+}

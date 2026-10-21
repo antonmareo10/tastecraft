@@ -46,6 +46,14 @@ describe("live-run gate", () => {
     expect(acquireLiveRun("9.9.9.9").ok).toBe(false);
   });
 
+  it("rate-limits cheap calls per key within a sliding window", async () => {
+    const { allowCall } = await load();
+    const t = 1_000_000;
+    expect([1, 2, 3].map(() => allowCall("profile:1.1.1.1", 2, 3_600_000, t))).toEqual([true, true, false]);
+    expect(allowCall("profile:2.2.2.2", 2, 3_600_000, t)).toBe(true); // other callers are unaffected
+    expect(allowCall("profile:1.1.1.1", 2, 3_600_000, t + 3_600_001)).toBe(true); // the window slides
+  });
+
   it("pauses on a rejected key", async () => {
     const { describeLiveFailure, liveRunsDisabled } = await load();
     const denied = new Anthropic.AuthenticationError(401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }, "invalid x-api-key", new Headers());

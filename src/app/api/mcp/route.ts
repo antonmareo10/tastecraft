@@ -1,14 +1,20 @@
 // Tastecraft as an MCP server, so existing agents (Claude Desktop, Cursor, a POS assistant…)
 // can ask for a restaurant's taste profile or a full playbook.
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { runTastecraft } from "@/lib/agent";
-import { acquireLiveRun, describeLiveFailure } from "@/lib/limits";
+import { acquireLiveRun, allowCall, clientIp, describeLiveFailure } from "@/lib/limits";
 import { qlooConfigured } from "@/lib/qloo";
 import { audienceAffinity, audienceDemographics, findRestaurant, resolveRestaurant, tasteTags } from "@/lib/qloo-tasks";
 import type { AgentEvent, Playbook } from "@/lib/types";
 
 export const maxDuration = 300;
+
+// The public endpoint spends this demo's Qloo quota, so every tool is rate-limited per caller and per day.
+const PROFILE_PER_IP_PER_HOUR = Number(process.env.MCP_PROFILE_PER_IP_PER_HOUR || 10);
+const PROFILE_DAILY_CAP = Number(process.env.MCP_PROFILE_DAILY_CAP || 200);
+const caller = new AsyncLocalStorage<string>();
 
 const text = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 1) }] });
 const fail = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true });
@@ -29,6 +35,9 @@ const handler = createMcpHandler(
       },
       async ({ restaurant, city, entity_id }) => {
         if (!qlooConfigured()) return fail("Qloo is not configured on this server.");
+        const ip = caller.getStore() ?? "unknown";
+        if (!allowCall(`profile:${ip}`, PROFILE_PER_IP_PER_HOUR, 3_600_000)) return fail("You've reached this demo's hourly limit of taste profiles. Try again later.");
+        if (!allowCall("profile:all", PROFILE_DAILY_CAP, 86_400_000)) return fail("This demo's daily budget of taste profiles is used up. Try again tomorrow.");
         const { selected: match, resolution } = resolveRestaurant(restaurant, city, await findRestaurant(restaurant, city), entity_id);
         if (!match) return fail(`No Qloo match for ${restaurant} in ${city}.`);
         const ids = [match.entity_id];
@@ -77,7 +86,7 @@ const handler = createMcpHandler(
       },
       async ({ restaurant, city, entity_id, goal, language }) => {
         if (!qlooConfigured()) return fail("Qloo is not configured on this server.");
-        const gate = acquireLiveRun("mcp");
+        const gate = acquireLiveRun(`mcp:${caller.getStore() ?? "unknown"}`);
         if (!gate.ok) return fail(gate.reason);
         let playbook: Playbook | null = null;
         let error: string | null = null;
@@ -98,4 +107,7 @@ const handler = createMcpHandler(
   { serverInfo: { name: "tastecraft", version: "1.0.0" } },
 );
 
-export { handler as GET, handler as POST };
+// Remember who is calling, so the tools above can rate-limit per caller.
+const withCaller = (request: Request) => caller.run(clientIp(request), () => handler(request));
+
+export { withCaller as GET, withCaller as POST };
