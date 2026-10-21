@@ -6,6 +6,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { matchConcerts } from "./concerts";
 import { EvidenceLedger } from "./ledger";
+import { withLens } from "./lens";
 import { crowdLiftOf, parseBaselineDishes } from "./lift";
 import { QlooError } from "./qloo";
 import type { HarnessError } from "./qloo-harness";
@@ -298,7 +299,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         podcast: "Podcasts your guests love",
         destination: "Places your guests travel to",
       }[input.domain];
-      emit({ type: "tool_start", id, tool: "audience_affinity", label: lens ? `${label} (lens: ${[lens.age, lens.gender].filter(Boolean).join(", ")})` : label, input });
+      emit({ type: "tool_start", id, tool: "audience_affinity", label: withLens(label, lens), input });
       try {
         const results = await audienceAffinity({
           entityIds: input.entity_ids,
@@ -348,13 +349,13 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     }),
     run: async (input, ctx) => {
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
-      emit({ type: "tool_start", id, tool: "taste_gaps", label: `Finding taste gaps in ${input.city}`, input });
+      const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
+      emit({ type: "tool_start", id, tool: "taste_gaps", label: withLens(`Finding taste gaps in ${input.city}`, lens), input });
       if (!restaurant) {
         emit({ type: "tool_end", id, tool: "taste_gaps", summary: "Needs a restaurant first", error: true });
         return "Error: call find_restaurant first.";
       }
       try {
-        const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
         const { gaps, sampled, menu, crowd_n, city_n } = await tasteGaps({ restaurant, city: input.city, lens });
         for (const g of gaps) {
           ledger.record(g.tag, "taste_gaps", g.crowd_pct);
@@ -464,13 +465,13 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
     run: async (input, ctx) => {
       const id = ctx?.toolUse.id ?? crypto.randomUUID();
       const label = { dishes: "Dishes your audience craves", cuisines: "Cuisines your audience favours", ambience: "The vibe your audience looks for" }[input.family];
-      emit({ type: "tool_start", id, tool: "taste_tags", label, input });
+      const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
+      emit({ type: "tool_start", id, tool: "taste_tags", label: withLens(label, lens), input });
       if (!restaurant) {
         emit({ type: "tool_end", id, tool: "taste_tags", summary: "Needs a restaurant first", error: true });
         return "Error: call find_restaurant first.";
       }
       try {
-        const lens = input.lens_age || input.lens_gender ? { age: input.lens_age, gender: input.lens_gender } : undefined;
         const tags = await tasteTags({ entityId: restaurant.entity_id, city: input.city, family: input.family, lens });
         for (const t of tags) ledger.record(t.name, "taste_analysis", t.affinity != null ? t.affinity * 100 : null, { affinity: true });
         if (!lens && tags.length) emit({ type: "taste_tags", family: input.family, tags: tags.map((t) => ({ name: t.name, affinity: t.affinity })) });

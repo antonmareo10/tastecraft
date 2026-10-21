@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
 import { readNdjson } from "@/lib/ndjson";
+import { stepLabel } from "@/lib/lens";
 import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
 import { scrollToElement } from "@/lib/scroll";
 import type { Step, TimelineItem } from "./Timeline";
@@ -487,7 +488,8 @@ function derive(events: AgentEvent[]): { items: TimelineItem[]; live: LiveState 
         items.push({ kind: "note", text: ev.text, key: `note-${i}` });
         break;
       case "tool_start": {
-        const step: Step = { id: ev.id, tool: ev.tool, label: ev.label, done: false };
+        // Older recordings carry raw lens values ("(lens: 24_and_younger)"); show them in plain words.
+        const step: Step = { id: ev.id, tool: ev.tool, label: stepLabel(ev.label, ev.input), done: false };
         steps.set(ev.id, step);
         items.push({ kind: "step", step });
         break;

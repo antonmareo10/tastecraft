@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { readNdjson } from "@/lib/ndjson";
+import { stepLabel } from "@/lib/lens";
 import type { AgentEvent, AgentRequest, EntityRef, Evidence } from "@/lib/types";
 import { IconArrow, IconCheck, IconSpark } from "./icons";
 import { EvidenceLine, Section } from "./ui";
@@ -67,7 +68,7 @@ export default function FollowUp({
       }
       for await (const ev of readNdjson<AgentEvent>(res.body)) {
         if (ev.type === "tool_start" && ev.tool !== "answer_owner") {
-          update((t) => ({ ...t, steps: [...t.steps, { id: ev.id, label: ev.label, done: false }] }));
+          update((t) => ({ ...t, steps: [...t.steps, { id: ev.id, label: stepLabel(ev.label, ev.input), done: false }] }));
         } else if (ev.type === "tool_end") {
           update((t) => ({
             ...t,
