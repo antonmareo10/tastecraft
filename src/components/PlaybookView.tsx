@@ -2,8 +2,10 @@
 
 import dynamic from "next/dynamic";
 import { AnimatePresence, m } from "motion/react";
-import type { TermLift } from "@/lib/lift";
-import { displayMenuTerms } from "@/lib/menu-terms";
+import { gainPct, HELD_OUT } from "@/lib/benchmark";
+import { dishLowCount, isLowCount, LOW_COUNT_MENUS, type TermLift } from "@/lib/lift";
+import { displayMenuTerms, supportedFirst } from "@/lib/menu-terms";
+import { headerTags } from "@/lib/place-tags";
 import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
 import type { CrowdLift, EntityRef, HeatCell, Playbook, Resolution, ShowRef, TrendLine, Zone } from "@/lib/types";
 import {
@@ -51,11 +53,12 @@ export function liftLabel(v: number): string {
 }
 
 function termLine(t: TermLift, cl: Pick<CrowdLift, "crowd_n" | "city_n">): string {
-  return `${t.term}: on the menus of ${t.crowd} of ${cl.crowd_n} restaurants your guests love most vs ${t.city} of ${cl.city_n} of the city's most popular (${liftLabel(t.lift)})`;
+  return `${t.term}: on the menus of ${t.crowd} of ${cl.crowd_n} restaurants your guests love most vs ${t.city} of ${cl.city_n} of the city's most popular (${liftLabel(t.lift)}${isLowCount(t) ? ", low count" : ""})`;
 }
 
-const LIFT_HELP =
-  "Crowd lift compares two Qloo lists for the city: the ~150 restaurants this crowd loves most (Qloo affinity) and the city's ~150 most popular restaurants, counting only the ones with menu tags in Qloo. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. Computed by Tastecraft from Qloo data, never written by the model. The agent sees this crowd-vs-city contrast while planning, so a high score shows the plan follows it; the benchmark's held-out check measures how much carries over to restaurants the model did not see. It says nothing about how many covers a dish will sell.";
+const LOW_COUNT_HELP = `Low count: the term is on fewer than ${LOW_COUNT_MENUS} menus in both lists together, so its lift rests on a handful of restaurants (4 menus vs 0 already reads about ×4.8). Treat it as a hint, not a measurement.`;
+
+const LIFT_HELP = `Crowd lift compares two Qloo lists for the city: the ~150 restaurants this crowd loves most (Qloo affinity) and the city's ~150 most popular restaurants, counting only the ones with menu tags in Qloo. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. The ruler is Qloo's own menu tags: it measures whether dishes follow this crowd's Qloo signal, not demand. Computed by Tastecraft, never written by the model. The agent sees this crowd-vs-city contrast while planning, so a playbook's own score is in-sample; on restaurants the model never saw, the benchmark measured ${gainPct(HELD_OUT.ratio)} over the same model alone. ${LOW_COUNT_HELP} It says nothing about how many covers a dish will sell.`;
 
 const VERIFY_HELP =
   "Each evidence line cites the Qloo names (places, artists, tags) and 0-100 scores it relies on. The server checks that every cited name was returned by Qloo in this run and that every cited score is within 1 of a number Qloo returned for that name. Other numbers in the sentence, such as menu shares, are not checked.";
@@ -106,6 +109,9 @@ export default function PlaybookView({
   const p = live.playbook;
   const liveShows = live.shows;
   const domains = Object.keys(live.dna).filter((d) => live.dna[d]?.length);
+  // Qloo's tags minus age buckets, health notices, landmarks, logistics and repeats (src/lib/place-tags.ts).
+  const tags = headerTags(live.restaurant?.tags, 6);
+  const lowDishes = p?.menu_moves.filter((mv) => mv.lift != null && dishLowCount(mv.lift_terms)).length ?? 0;
 
   return (
     <div className="space-y-5">
@@ -142,9 +148,9 @@ export default function PlaybookView({
               {p ? `${p.restaurant.concept} · ${p.restaurant.city}` : live.restaurant?.subtitle}
             </p>
             {live.resolution && <MatchNote resolution={live.resolution} running={running} onPick={onPickAlternative} />}
-            {live.restaurant?.tags && live.restaurant.tags.length > 0 && (
+            {tags.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-1.5">
-                {live.restaurant.tags.slice(0, 6).map((t, i) => (
+                {tags.map((t, i) => (
                   <m.li
                     key={t}
                     initial={{ opacity: 0, y: 6 }}
@@ -172,23 +178,32 @@ export default function PlaybookView({
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, ease: EASE_OUT, delay: 0.12 }}
-                className="mt-5 inline-flex max-w-xl items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5"
+                className="mt-5 max-w-2xl rounded-2xl border border-paper/25 bg-paper/10 px-4 py-3"
               >
-                <span className="font-display text-4xl leading-none text-paper">
-                  <NumberReveal value={Math.round(p.crowd_lift.score * 10) / 10} decimals={1} prefix="×" delay={150} />
-                </span>
-                <div className="leading-tight">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Crowd lift</p>
-                  <p className="text-[11px] text-paper/80">
-                    Your guests’ favourite restaurants serve dishes like these {liftLabel(p.crowd_lift.score).slice(1)}× as often as{" "}
-                    {p.crowd_lift.city}’s most popular ones ({p.crowd_lift.matched} of {p.crowd_lift.total} dishes matched). Counted on the{" "}
-                    {p.crowd_lift.crowd_n} and {p.crowd_lift.city_n} restaurants with menu data in Qloo’s top ~150 of each.
-                    {p.crowd_lift.baseline?.score != null ? ` Quick answer from the same model without Qloo: ${liftLabel(p.crowd_lift.baseline.score)}.` : ""}{" "}
-                    <HowLink label="How is crowd lift measured?" title="Crowd lift" tone="dark">
-                      {LIFT_HELP}
-                    </HowLink>
-                  </p>
+                <div className="flex items-center gap-3">
+                  <span className="font-display text-4xl leading-none text-paper">
+                    <NumberReveal value={Math.round(p.crowd_lift.score * 10) / 10} decimals={1} prefix="×" delay={150} />
+                  </span>
+                  <div className="leading-tight">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">
+                      Crowd lift · this run <span className="font-normal normal-case tracking-normal text-paper/80">(in-sample)</span>
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-paper/80">
+                      Your guests’ favourite restaurants serve dishes like these {liftLabel(p.crowd_lift.score).slice(1)}× as often as{" "}
+                      {p.crowd_lift.city}’s most popular ones ({p.crowd_lift.matched} of {p.crowd_lift.total} dishes matched on local menus).
+                    </p>
+                  </div>
                 </div>
+                <p className="mt-2 text-[11px] leading-snug text-paper/75">
+                  In-sample: the agent saw the crowd-vs-city contrast this score is computed from
+                  {lowDishes > 0
+                    ? `, and ${lowDishes} of ${p.crowd_lift.total} dishes rest on terms found on fewer than ${LOW_COUNT_MENUS} menus (low count)`
+                    : ""}
+                  . On restaurants the model never saw, Qloo’s contrast measured {gainPct(HELD_OUT.ratio)} over the same model alone.{" "}
+                  <HowLink label="How is crowd lift measured?" title="Crowd lift" tone="dark">
+                    {LIFT_HELP}
+                  </HowLink>
+                </p>
               </m.div>
             ) : null}
             {p?.verification && p.verification.checked > 0 ? (
@@ -215,6 +230,9 @@ export default function PlaybookView({
         </m.section>
       )}
 
+      {/* The with/without-Qloo comparison comes first: it is what the playbook's number means. */}
+      {p && live.baseline && <Compare baseline={live.baseline} playbook={p} />}
+
       {/* One compact row: it scrolls sideways on narrow phones instead of wrapping. */}
       {p && !running && <SectionNav items={ACTS} />}
 
@@ -228,7 +246,7 @@ export default function PlaybookView({
           {p?.audience_dna.summary && <p className="mb-4 max-w-3xl text-[15px] leading-relaxed text-ink-2">{p.audience_dna.summary}</p>}
           <div className="mb-5">
             <TasteConstellation
-              center={{ name: p?.restaurant.name ?? live.restaurant?.name ?? "Your restaurant", tags: live.restaurant?.tags }}
+              center={{ name: p?.restaurant.name ?? live.restaurant?.name ?? "Your restaurant", tags }}
               domains={live.dna}
             />
           </div>
@@ -385,6 +403,7 @@ export default function PlaybookView({
             <div className="grid gap-4 lg:grid-cols-3">
               {p.menu_moves.map((mv, n) => {
                 const cl = p.crowd_lift;
+                const low = dishLowCount(mv.lift_terms);
                 return (
                 <m.article
                   key={mv.dish}
@@ -400,23 +419,30 @@ export default function PlaybookView({
                   <div className="mt-1.5 flex items-center justify-between gap-3">
                     {mv.lift != null && cl ? (
                       <InfoPopover
-                        label={`Crowd lift for this dish: ${liftLabel(mv.lift)}. Show the local menu counts`}
-                        title={`Crowd lift for this dish: ${liftLabel(mv.lift)}`}
+                        label={`Crowd lift for this dish: ${liftLabel(mv.lift)}${low ? ", low count" : ""}. Show the local menu counts`}
+                        title={`Crowd lift for this dish: ${liftLabel(mv.lift)}${low ? " (low count)" : ""}`}
                         trigger={
                           <>
                             {liftLabel(mv.lift)}
                             <span aria-hidden className="font-normal opacity-80">
-                              crowd lift
+                              {low ? "crowd lift · low count" : "crowd lift"}
                             </span>
                           </>
                         }
-                        className={`relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${mv.lift >= 1 ? "bg-olive/10 text-olive" : "bg-terracotta/10 text-terracotta-ink"}`}
+                        className={`relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${
+                          low
+                            ? "border border-dashed border-ink-2/35 bg-paper text-ink-2"
+                            : mv.lift >= 1
+                              ? "bg-olive/10 text-olive"
+                              : "bg-terracotta/10 text-terracotta-ink"
+                        }`}
                       >
                         <ul className="space-y-1.5">
                           {(mv.lift_terms ?? []).map((t) => (
                             <li key={t.term}>{termLine(t, cl)}</li>
                           ))}
                         </ul>
+                        {low && <p className="mt-2 text-muted">{LOW_COUNT_HELP}</p>}
                       </InfoPopover>
                     ) : (
                       <span />
@@ -433,6 +459,7 @@ export default function PlaybookView({
                         <span key={t.term}>
                           {i > 0 && " · "}
                           <span className="font-medium text-ink-2">{t.term}</span> {t.crowd} of {cl.crowd_n} vs {t.city} of {cl.city_n}
+                          {isLowCount(t) && <span className="text-terracotta-ink"> (low count)</span>}
                         </span>
                       ))}
                     </p>
@@ -541,8 +568,6 @@ export default function PlaybookView({
           <ShoppingList playbook={p} />
 
           {p.week_plan?.length > 0 && <WeekPlan playbook={p} />}
-
-          {live.baseline && <Compare baseline={live.baseline} playbook={p} />}
 
           {p.caveats.length > 0 && (
             <section className="rounded-2xl border border-dashed border-line px-5 py-4 text-[13px] leading-relaxed text-muted">
@@ -731,7 +756,7 @@ function MatchNote({
 
 function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: string; subtitle: string }) {
   return (
-    <header id={id} className="scroll-mt-20 pt-6">
+    <header id={id} className="scroll-mt-8 pt-6">
       <InViewGroup amount={0.5} className="flex items-center gap-3">
         <p className="font-display shrink-0 text-sm text-terracotta-ink">Act {n}</p>
         <span aria-hidden className="bar-fill h-px flex-1 bg-line" />
@@ -747,8 +772,10 @@ function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: s
 // Crowd vs city, term by term: the share of the crowd's favourite restaurants whose menus carry
 // the term (olive) against the share of the city's most popular ones (grey), drawn to one scale.
 function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
-  // Only terms that read as dishes or foods (src/lib/menu-terms.ts); counts and lifts are unchanged.
-  const rows = displayMenuTerms(data.favours, 6);
+  // Only terms that read as dishes or foods (src/lib/menu-terms.ts), better-supported ones first;
+  // counts and lifts are unchanged.
+  const rows = displayMenuTerms(supportedFirst(data.favours), 6);
+  const anyLow = rows.some(isLowCount);
   const avoids = displayMenuTerms(data.avoids, 4, (t) => t.city);
   const share = (n: number, of: number) => (of > 0 ? n / of : 0);
   const top = Math.max(1e-6, ...rows.flatMap((t) => [share(t.crowd, data.crowd_n), share(t.city, data.city_n)]));
@@ -757,7 +784,8 @@ function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
     <div className="rounded-xl border border-olive/25 bg-olive/5 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">On your crowd’s menus</p>
       <p className="mb-2 text-[11px] leading-snug text-muted">
-        Menus at the {data.crowd_n} restaurants your guests love most vs {data.city}’s {data.city_n} most popular (Qloo)
+        Of Qloo’s ~150 restaurants your guests love most and {data.city}’s ~150 most popular: menus at the {data.crowd_n} and{" "}
+        {data.city_n} with menu data
       </p>
       <p aria-hidden className="mb-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-muted">
         <span className="inline-flex items-center gap-1.5">
@@ -773,7 +801,13 @@ function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
             <li key={t.term}>
               <div className="flex items-baseline justify-between gap-2">
                 <span className="min-w-0 text-sm leading-snug">{t.term}</span>
-                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-olive">{liftLabel(t.lift)}</span>
+                {isLowCount(t) ? (
+                  <span className="shrink-0 text-[11px] tabular-nums text-muted" title={LOW_COUNT_HELP}>
+                    {liftLabel(t.lift)} · low count
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-[11px] font-semibold tabular-nums text-olive">{liftLabel(t.lift)}</span>
+                )}
               </div>
               <div aria-hidden className="mt-1 grid grid-cols-[1fr_3rem] items-center gap-x-2 gap-y-0.5 text-right text-[10px] tabular-nums text-muted">
                 <span className="h-1.5 overflow-hidden rounded-full bg-paper-2">
@@ -805,6 +839,11 @@ function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
       {avoids.length > 0 && (
         <p className="mt-2.5 text-[11px] leading-snug text-muted">
           Rarer with your crowd: {avoids.map((t) => t.term).join(" · ")}
+        </p>
+      )}
+      {anyLow && (
+        <p className="mt-2 text-[11px] leading-snug text-muted">
+          Low count = on fewer than {LOW_COUNT_MENUS} menus in both lists together; listed after the better-supported terms.
         </p>
       )}
       <p className="mt-2 text-[11px]">
@@ -1121,35 +1160,33 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
   const cl = p.crowd_lift;
   const generic = cl?.baseline;
   const event = /^\s*(?:event|evento)\s*[:.-]\s*(.+)$/im.exec(baseline)?.[1];
+  const lowTag = <span className="font-normal text-muted"> · low count</span>;
   return (
-    <Section icon={<IconSpark size={16} />} kicker="Why taste data matters" title="Generic AI vs. Tastecraft">
+    <Section icon={<IconSpark size={16} />} kicker="Why taste data matters" title="The same model, with and without Qloo">
       {cl?.score != null && generic?.score != null && (
         <p className="mb-3 text-[13px] leading-snug text-ink-2">
-          Same crowd-lift formula on both sets of dishes: <span className="font-semibold text-terracotta-ink">{liftLabel(generic.score)}</span> without
-          Qloo vs <span className="font-semibold text-olive">{liftLabel(cl.score)}</span> with Qloo (×1.0 = no different from {cl.city}’s
-          most popular restaurants).{" "}
+          Same crowd-lift formula on both sets of dishes, in this run: <span className="font-semibold text-terracotta-ink">{liftLabel(generic.score)}</span>{" "}
+          without Qloo vs <span className="font-semibold text-olive">{liftLabel(cl.score)}</span> with Qloo (×1.0 = no different from{" "}
+          {cl.city}’s most popular restaurants).{" "}
           <HowLink label="How is crowd lift measured?" title="Crowd lift">
             {LIFT_HELP}
           </HowLink>
         </p>
       )}
       <p className="mb-3 text-[12px] leading-snug text-muted">
-        The left column is a quick answer from the same model: one call with no tools and no Qloo data, at low effort and capped at 90
-        words, while the agent works with Qloo at medium effort and sees the crowd-vs-city contrast this score is built on. For a
-        comparison at equal effort, scored on restaurants the model never saw, see the{" "}
-        <a
-          href="https://github.com/antonmareo10/tastecraft/blob/main/eval/SUMMARY.md"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline decoration-line underline-offset-2 hover:text-ink"
-        >
-          benchmark
+        This run is not a like-for-like test. The left column is one quick call to the same model (no tools, no Qloo data, low
+        effort, at most 90 words); the agent works with Qloo at medium effort and sees the crowd-vs-city contrast this score is built
+        on. The fair test is the benchmark: same model and effort in every arm, scored on restaurants the model never saw. There,
+        Qloo’s contrast scored ×{HELD_OUT.withQloo.toFixed(2)} against ×{HELD_OUT.alone.toFixed(2)} for the model alone:{" "}
+        {gainPct(HELD_OUT.ratio)} per restaurant (95% CI {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in{" "}
+        {HELD_OUT.better} of {HELD_OUT.restaurants}.{" "}
+        <a href={HELD_OUT.url} target="_blank" rel="noopener noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
+          Benchmark
         </a>
-        .
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="lift rounded-xl border border-line bg-paper/40 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model, quick answer without Qloo</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model without Qloo · one quick call</p>
           {generic?.score != null && (
             <p className="mt-1 text-[11px] font-semibold text-muted">
               Crowd lift {liftLabel(generic.score)} · {generic.matched} of {generic.total} dishes matched on local menus
@@ -1160,6 +1197,7 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
               {generic.dishes.map((d) => (
                 <li key={d.dish} title={cl ? d.terms.map((t) => termLine(t, cl)).join("\n") : undefined}>
                   <span className="font-semibold">{d.dish}</span> {d.lift != null ? `— ${liftLabel(d.lift)}` : "— no match on local menus"}
+                  {d.lift != null && dishLowCount(d.terms) && lowTag}
                 </li>
               ))}
               {event && (
@@ -1183,7 +1221,9 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
             {p.menu_moves.map((mv) => (
               <li key={mv.dish}>
                 <span className="font-semibold">{mv.dish}</span>
-                {mv.lift != null ? ` (${liftLabel(mv.lift)})` : ""} — {mv.evidence[0]?.text ?? mv.why}
+                {mv.lift != null ? ` (${liftLabel(mv.lift)}` : ""}
+                {mv.lift != null && dishLowCount(mv.lift_terms) && <span className="text-muted">, low count</span>}
+                {mv.lift != null ? ")" : ""} — {mv.evidence[0]?.text ?? mv.why}
               </li>
             ))}
             {p.taste_gaps[0] && (

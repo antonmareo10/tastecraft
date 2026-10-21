@@ -130,7 +130,7 @@ export default function SectionNav({ items }: { items: readonly (readonly [id: s
               if (!target) return;
               e.preventDefault();
               setActive(id);
-              scrollToElement(target, 64);
+              scrollToElement(target, 32);
               history.replaceState(null, "", `#${id}`);
             }}
             className={`relative flex shrink-0 items-center rounded-full px-2.5 py-1.5 text-[12px] transition-colors duration-300 pointer-coarse:min-h-10 sm:px-3 sm:text-[13px] ${
