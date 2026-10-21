@@ -8,12 +8,19 @@
 ## Judge in 60 seconds
 
 1. Open the live demo and click **Gjelina, Los Angeles** (or any of the three) under *Instant replays of real runs*. Each is a recorded real run (Qloo + Claude), replayed in about 15 seconds.
-2. Look at the **crowd lift** badge under the headline (in-sample: the agent saw the contrast it is scored on; the held-out numbers are below): how much more often the restaurants this crowd loves serve the proposed dishes than the city's ~150 most popular restaurants in Qloo, next to the same score for a quick answer from the same model *without* Qloo.
-3. Scroll to **Three dishes to test**: each dish shows its lift and the local-menu counts behind it, and each evidence line is marked ✓ when every Qloo name and score it cites was returned in that run (other numbers in the text are not checked).
-4. **Generic AI vs. Tastecraft** scores both answers with the same formula. **Cravings** shows what is specific to this crowd ("On your crowd's menus" vs the city), and **Head-to-head** shows what only this restaurant, or only its closest rival, is known for.
+2. Under the headline, the **crowd lift** badge is labelled *this run (in-sample)*: how much more often the restaurants this crowd loves serve the proposed dishes than the city's ~150 most popular restaurants in Qloo. In-sample means the agent saw the contrast it is scored on.
+3. Right below it, **The same model, with and without Qloo** scores both answers with the same formula. That run is not like-for-like (the no-Qloo column is one quick, low-effort call), so the section also quotes the equal-effort, held-out benchmark.
+4. Scroll to **Three dishes to test**: each dish shows its lift and the local-menu counts behind it, lifts that rest on fewer than 5 menus are marked *low count*, and each evidence line is marked ✓ when every Qloo name and score it cites was returned in that run (other numbers in the text are not checked). **Cravings** shows what is specific to this crowd ("On your crowd's menus" vs the city), and **Head-to-head** shows what only this restaurant, or only its closest rival, is known for.
 5. Want it live? Type any restaurant and city. A live run takes about **2 minutes** (median 128 s over 5 runs, 102–178 s) and live runs are capped per day; replays are always instant.
 
-The numbers behind the claim are in **[eval/SUMMARY.md](eval/SUMMARY.md)**. On 8 restaurants in 8 cities, scored on restaurants the model never saw (a held-out half of each Qloo restaurant set, 5 random splits), the same model's dishes score **×0.90** crowd lift on their own, **×1.00** when given Qloo affinity data, and **×1.15** with Tastecraft's crowd-vs-city contrast computed on the other half: ×1.27 the model alone per restaurant (95% bootstrap interval ×1.07–×1.48), better in 6 of 8 restaurants and 29 of 40 plans, but not distinguishable from affinity data alone with this sample. Scored in-sample, where the model also sees the contrast its dishes are scored on, the same comparison reads ×0.91 / ×1.02 / ×2.44, and recorded full-agent playbooks score ×2.95 vs ×0.88 for their own no-Qloo answers (n = 3); the held-out check shows that most of that larger gap comes from seeing the scored restaurants.
+**The headline number: +27% over the same model alone, on restaurants it never saw.** The details are in **[eval/SUMMARY.md](eval/SUMMARY.md)**. On 8 restaurants in 8 cities, with the same model at the same effort in every arm and every dish scored only on a held-out half of each Qloo restaurant set (5 random splits), the model's dishes score **×0.90** crowd lift on their own, **×1.00** when given Qloo affinity data, and **×1.15** with Tastecraft's crowd-vs-city contrast computed on the other half: **×1.27 the model alone per restaurant (95% bootstrap interval ×1.07–×1.48)**, better in 6 of 8 restaurants and 29 of 40 plans. With this sample it cannot be told apart from Qloo affinity data alone (×1.15, interval ×0.89–×1.53). The ruler is Qloo's own menu tags, so this measures whether the dishes follow the crowd's Qloo signal, not whether guests will order them.
+
+Other numbers you will see, and why they are larger:
+
+- **The badge on each recorded playbook** (×2.8 Gjelina, ×2.9 Katz's, ×3.2 Casa Lucio; geometric mean ×2.95 against ×0.88 for the same runs' no-Qloo quick answers, n = 3) is in-sample and not like-for-like: the agent sees the contrast it is scored on and works at medium effort, while the quick answer is one low-effort call capped at 90 words.
+- **The in-sample benchmark** (same model and effort, scored on the restaurants whose contrast the model was shown) reads ×0.91 / ×1.02 / ×2.44.
+
+The held-out check shows that most of the gap between those numbers and +27% comes from seeing the scored restaurants.
 
 ## How this maps to the judging criteria
 
@@ -21,7 +28,7 @@ The numbers behind the claim are in **[eval/SUMMARY.md](eval/SUMMARY.md)**. On 8
 |---|---|
 | **Technological implementation** (how thoroughly and skillfully Qloo is used) | Eight Qloo workflows ([below](#how-tastecraft-uses-qloo)): seven over `/search`, `/entities`, `/v2/insights` (entity, tag, demographics and heatmap outputs) and `/v2/analysis/compare`, and concert ranking through Qloo's official qloo-harness `rank` workflow; a crowd-vs-city contrast built from two Qloo queries that separates what a crowd favours from what is popular everywhere ([src/lib/lift.ts](src/lib/lift.ts)); every cited Qloo name and score checked against the run's own Qloo responses ([src/lib/ledger.ts](src/lib/ledger.ts)); bounded retries and request smoothing like Qloo's official client; unit tests that need no keys or network, and CI. |
 | **Design** | Streaming agent log, live playbook draft, taste constellation, taste map, per-dish evidence with ✓/⚠, side-by-side with/without Qloo, PDF export, English/Spanish. |
-| **Potential impact** | Independent restaurants (7 in 10 US restaurants are single-unit) get an insight team's output: dishes, an event, a campaign, a shopping list and a week plan. MCP endpoint so POS or reservation assistants can call it. |
+| **Potential impact** | Independent restaurants (more than 7 in 10 US restaurants are single-unit) get an insight team's output: dishes, an event, a campaign, a shopping list and a week plan. MCP endpoint so POS or reservation assistants can call it. Price, cost to serve, channels and market: [Business case](#business-case). |
 | **Quality of the idea** (creative, non-obvious use of Qloo) | Uses the audience's *other* tastes (places, music, brands) and contrasts them with the city to find what is specific to this crowd — for example, Katz's guests' other favourite places are cheap pizza slices, hot-dog counters and dive bars, which leads to a weeknight pub-snack menu rather than more deli classics. |
 
 ## How this maps to Qloo's submission guide
@@ -58,6 +65,8 @@ Qloo's tag affinity is percentile-like and saturates at the top for any audience
 - **crowd** = the ~150 restaurants in the city this restaurant's audience has the highest Qloo affinity for; **city** = the city's ~150 most popular restaurants (same query, no audience signal). Only restaurants with menu tags in Qloo count (in Los Angeles, for example, 145 of the crowd's and 139 of the city's); the playbook shows both counts.
 - A dish name is split into the food terms local Qloo menu tags use (a multi-word term must appear on at least 3 menus; preparation, season and format words never count alone).
 - Term lift = share of crowd restaurants whose menu tags mention it ÷ share of city restaurants that do, add-one smoothed (×1.0 = no difference). Dish and plan scores are geometric means.
+- **The ruler comes from Qloo.** Crowd lift is computed from Qloo's own menu tags, so it tests whether dishes follow this crowd's Qloo signal, not demand.
+- **Low count.** A term on fewer than 5 menus in both lists together (4 vs 0 already reads about ×4.8 after smoothing) is marked *low count* wherever it appears, and lists lead with better-supported terms. The score itself is unchanged.
 - Computed on the server from Qloo data and the dish names, never written by the model. The same function scores the no-Qloo baseline, the benchmark ([scripts/benchmark.ts](scripts/benchmark.ts)) and the replays.
 
 ## What the owner gets
@@ -87,7 +96,7 @@ Browser ──POST /api/agent──▶ Next.js route (streams NDJSON events)
 - **The right restaurant first.** Each match is labelled exact, close or best guess, and the owner can switch to another candidate ("Not your restaurant?"). Their pick always wins over the agent's.
 - **Grounding rules.** Every recommendation must cite concrete Qloo facts (names and scores exactly as returned); the server marks each evidence line ✓ when every cited name was returned in the run and every cited score is within 1 of a number Qloo returned for that name, ⚠ otherwise. Other numbers in the prose, such as menu shares, are not checked. The final output is a schema-validated `publish_playbook` tool call, streamed so the UI drafts the playbook live; if the streamed JSON is malformed, the last step is retried once with server-validated input.
 - **Honest gaps.** Tools return errors or empty data as such, and the playbook's caveats list what is missing. Place popularity trends are off because the hackathon `/v2/trending` endpoint does not accept places (set `QLOO_PLACE_TRENDS=1` if a key does).
-- **Cost and abuse protection.** Live runs are rate-limited per IP, capped per day and limited in concurrency (per server instance). A run uses about US$0.3–0.4 of Claude usage at Claude Opus 5.5 list prices (token counts of two logged runs: 82–93k input tokens, mostly cache reads, and 8.7–9.2k output tokens). If the AI key is rejected or the account runs out of credit, live runs pause with a clear message and the UI offers the recorded runs.
+- **Cost and abuse protection.** Live runs are rate-limited per IP, capped per day and limited in concurrency (per server instance). A run uses about US$0.32–0.37 of Claude usage at Claude Opus 5.5 list prices (see [Business case](#business-case)). If the AI key is rejected or the account runs out of credit, or the daily cap is reached, live runs pause with a clear message and the UI offers the recorded runs; follow-up questions after a replay are labelled as live runs.
 
 ## Qloo data handling
 
@@ -107,6 +116,20 @@ Browser ──POST /api/agent──▶ Next.js route (streams NDJSON events)
 - **Estimates are estimates.** Prices, quantities and costs in the shopping list are realistic estimates, not supplier quotes. Neighborhood names come from OpenStreetMap and can be approximate.
 - **Live events depend on Ticketmaster.** Only listed events appear, and some leagues are not sold there (for example, Spanish football).
 - **Run time.** A live run takes about 2 minutes (measured on a local production build; 5 runs, 102–178 s); hosting can add latency.
+
+## Business case
+
+Numbers marked *hypothesis* are not tested yet; everything else is measured or sourced.
+
+| | |
+|---|---|
+| **Who pays** | Independent restaurants and small groups (2–10 locations), per location per month, with the first playbook free. *Price hypothesis:* US$49 per location per month. |
+| **Cost to make a playbook** | **Claude: US$0.32–0.37**, from the token counts of two logged runs at Claude Opus 5.5 list prices (US$4 per million input tokens, US$5 per million 5-minute cache writes, US$0.20 per million cache reads, US$20 per million output tokens). The runs used 81.8k and 92.9k input tokens (57.2k and 60.1k of them cache reads, 24.6k and 32.8k cache writes) and 8.7k and 9.2k output tokens, plus under US$0.01 for the no-Qloo quick answer. **Qloo: about 17 to 34 API requests**, counted from the code paths the three recorded runs took: restaurant search 1–2, audience affinity 4–5, taste tags 3, demographics 1, head-to-head 1, the crowd and city sets 6 (3 pages of 50 each, plus 3 for an age-lens crowd), heatmap 1, and the concert ranking through Qloo's harness, which adds one request plus one lookup per artist (up to 10) and the restaurant. Identical requests are cached for 6 hours. |
+| **Unit economics** | A weekly playbook is about US$1.50 of Claude per location per month. Qloo's commercial price is not public, so it is not included. |
+| **How it reaches owners** | The app marketplaces of POS systems (Toast, Square and Clover each run one) and reservation platforms' partner programs, through the MCP endpoint or an embed; and food distributors, because the shopping list is already an order for them. |
+| **How big** | 412,498 independent restaurants in the US at the end of 2025, down 2.3% in a year ([Technomic data via Nation's Restaurant News](https://www.nrn.com/independent-restaurants/the-independent-restaurant-sector-shrunk-by-2-3-in-2025)); more than 7 in 10 US restaurants are single-unit operations ([National Restaurant Association, 2025 State of the Industry pocket guide](https://go.restaurant.org/rs/078-ZLA-461/images/SOI-2025-PocketGuide.pdf)). Arithmetic, not a forecast: 1% of US independents at the hypothetical price is about 4,125 locations and US$2.4M a year. |
+| **Why it is good for Qloo** | Every playbook is Qloo API usage, and a weekly playbook makes every subscribing restaurant a recurring Qloo API customer by proxy. |
+| **Why this builder** | The author built Supplora, an AI tool that read 715 supplier delivery notes for a family-run restaurant in Spain by September 2026. That is where the gap showed: owners who know their costs to the cent decide their specials on gut feel. |
 
 ## Use it from any agent (MCP)
 
@@ -178,7 +201,7 @@ Next.js 16 (App Router) · React 19 · Tailwind CSS 4 · Anthropic TypeScript SD
 
 ## Who built it
 
-Antonio González Fernández — Business Administration + Data Science student (CUNEF, Madrid). Tastecraft grows out of building [Supplora](https://www.supplora.app), an AI tool a family-run restaurant in Spain uses to read supplier delivery notes and load them into its management system. Talking to restaurant owners made the gap obvious: they have the purchasing data, but no way to know what their own guests actually want.
+Antonio González Fernández — Business Administration + Data Science student (CUNEF, Madrid). Tastecraft grows out of building [Supplora](https://www.supplora.app), my earlier product: an AI tool that reads a family-run restaurant's supplier delivery notes and loads them into its management system. Working with restaurant owners made the gap obvious: they have the purchasing data, but no way to know what their own guests actually want.
 
 ## License
 
