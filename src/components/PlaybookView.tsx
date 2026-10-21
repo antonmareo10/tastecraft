@@ -1,7 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { AnimatePresence, m } from "motion/react";
 import type { TermLift } from "@/lib/lift";
+import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
 import type { CrowdLift, EntityRef, HeatCell, Playbook, Resolution, ShowRef, TrendLine, Zone } from "@/lib/types";
 import {
   IconBasket,
@@ -16,13 +18,17 @@ import {
   IconTrend,
   IconUsers,
 } from "./icons";
-import { AffinityBar, CopyButton, EvidenceLine, Pill, Section } from "./ui";
+import { AffinityBar, CopyButton, EvidenceLine, HowLink, Pill, Section } from "./ui";
+import { CountUp, InViewGroup, KineticText, Reveal } from "./fx";
+import { InfoPopover } from "./Popover";
+import SectionNav from "./SectionNav";
+import { toast } from "./Toaster";
 import ShareAssets from "./ShareAssets";
 import TasteConstellation from "./TasteConstellation";
 
 const TasteMap = dynamic(() => import("./TasteMap"), {
   ssr: false,
-  loading: () => <div className="h-[380px] animate-pulse rounded-xl bg-paper-2" />,
+  loading: () => <div className="shimmer h-[380px] rounded-xl bg-paper-2" />,
 });
 
 const DOMAIN_LABEL: Record<string, string> = {
@@ -79,6 +85,12 @@ export type LiveState = {
 
 export type Alternative = Resolution["alternatives"][number];
 
+const ACTS = [
+  ["act-read", "1 · Read the room"],
+  ["act-moves", "2 · The moves"],
+  ["act-premiere", "3 · Opening night"],
+] as const;
+
 export default function PlaybookView({
   live,
   running,
@@ -98,15 +110,25 @@ export default function PlaybookView({
     <div className="space-y-5">
       {/* Restaurant + headline */}
       {(live.restaurant || p) && (
-        <section className="rise overflow-hidden rounded-2xl border border-line bg-olive text-paper">
-          <div className="grain px-6 py-6 sm:px-8 sm:py-8">
+        <m.section
+          initial="hidden"
+          animate="shown"
+          variants={REVEAL}
+          className="on-dark relative overflow-hidden rounded-2xl border border-line bg-olive text-paper"
+        >
+          {/* A soft warm light in the corner, like the home page's. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(221,154,46,0.22),transparent_65%)]"
+          />
+          <div className="grain relative px-6 py-6 sm:px-8 sm:py-8">
             <div className="flex items-start justify-between gap-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-paper/70">Taste playbook</p>
               {p && !running && (
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="no-print inline-flex items-center gap-1.5 rounded-full border border-paper/30 px-3 py-1 text-xs text-paper/90 transition hover:bg-paper/10"
+                  className="no-print inline-flex min-h-8 items-center gap-1.5 pointer-coarse:min-h-11 pointer-coarse:px-4 rounded-full border border-paper/30 px-3 py-1 text-xs text-paper/90 transition hover:bg-paper/10 active:scale-[0.97]"
                 >
                   <IconDownload size={13} /> Save as PDF
                 </button>
@@ -121,70 +143,79 @@ export default function PlaybookView({
             {live.resolution && <MatchNote resolution={live.resolution} running={running} onPick={onPickAlternative} />}
             {live.restaurant?.tags && live.restaurant.tags.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-1.5">
-                {live.restaurant.tags.slice(0, 6).map((t) => (
-                  <li key={t} className="rounded-full border border-paper/25 px-2.5 py-0.5 text-xs text-paper/85">
+                {live.restaurant.tags.slice(0, 6).map((t, i) => (
+                  <m.li
+                    key={t}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: EASE_OUT, delay: 0.15 + i * STAGGER }}
+                    className="rounded-full border border-paper/25 px-2.5 py-0.5 text-xs text-paper/85"
+                  >
                     {t}
-                  </li>
+                  </m.li>
                 ))}
               </ul>
             )}
             {p?.headline ? (
-              <p className="font-display mt-5 max-w-3xl text-xl leading-snug text-paper sm:text-2xl">“{p.headline}”</p>
+              <m.p
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, ease: EASE_OUT }}
+                className="font-display mt-5 max-w-3xl text-xl leading-snug text-paper sm:text-2xl"
+              >
+                “{p.headline}”
+              </m.p>
             ) : null}
             {p?.crowd_lift?.score != null ? (
-              <div className="mt-5 inline-flex max-w-xl items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5" title={LIFT_HELP}>
-                <span className="font-display text-4xl leading-none text-paper">{liftLabel(p.crowd_lift.score)}</span>
+              <m.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, ease: EASE_OUT, delay: 0.12 }}
+                className="mt-5 inline-flex max-w-xl items-center gap-3 rounded-2xl border border-paper/25 bg-paper/10 px-4 py-2.5"
+              >
+                <span className="font-display text-4xl leading-none text-paper">
+                  <CountUp value={Math.round(p.crowd_lift.score * 10) / 10} decimals={1} prefix="×" delay={250} />
+                </span>
                 <div className="leading-tight">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Crowd lift</p>
                   <p className="text-[11px] text-paper/80">
                     Your guests’ favourite restaurants serve dishes like these {liftLabel(p.crowd_lift.score).slice(1)}× as often as{" "}
                     {p.crowd_lift.city}’s most popular ones ({p.crowd_lift.matched} of {p.crowd_lift.total} dishes matched). Counted on the{" "}
                     {p.crowd_lift.crowd_n} and {p.crowd_lift.city_n} restaurants with menu data in Qloo’s top ~150 of each.
-                    {p.crowd_lift.baseline?.score != null ? ` Quick answer from the same model without Qloo: ${liftLabel(p.crowd_lift.baseline.score)}.` : ""}
+                    {p.crowd_lift.baseline?.score != null ? ` Quick answer from the same model without Qloo: ${liftLabel(p.crowd_lift.baseline.score)}.` : ""}{" "}
+                    <HowLink label="How is crowd lift measured?" title="Crowd lift" tone="dark">
+                      {LIFT_HELP}
+                    </HowLink>
                   </p>
                 </div>
-              </div>
+              </m.div>
             ) : null}
             {p?.verification && p.verification.checked > 0 ? (
-              <p
+              <m.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.24 }}
                 className="mt-4 flex w-fit max-w-full items-start gap-2 rounded-2xl border border-paper/25 px-3 py-1.5 text-xs leading-snug text-paper/85"
-                title={VERIFY_HELP}
               >
                 <IconCheck size={13} className="mt-px shrink-0" />
                 <span>
-                  {p.verification.verified} of {p.verification.checked} evidence lines check out: every Qloo name and score they cite was
-                  returned in this run
+                  <CountUp value={p.verification.verified} delay={400} duration={900} /> of {p.verification.checked} evidence lines check
+                  out: every Qloo name and score they cite was returned in this run
+                  <span aria-hidden className="px-1.5 opacity-60">·</span>
+                  <HowLink label="What is checked?" title="What is checked" tone="dark">
+                    {VERIFY_HELP}
+                  </HowLink>
                 </span>
-              </p>
+              </m.p>
             ) : running ? (
               <p className="mt-5 text-sm text-paper/70">Building the playbook from live taste data…</p>
             ) : null}
           </div>
-        </section>
+        </m.section>
       )}
 
-      {p && !running && (
-        // One compact row: it scrolls sideways on narrow phones instead of wrapping, and its solid
-        // background keeps the content passing underneath from showing through.
-        <nav
-          aria-label="Playbook sections"
-          className="no-print sticky top-2 z-[1100] flex w-fit max-w-full flex-nowrap gap-1 overflow-x-auto whitespace-nowrap rounded-full border border-line bg-card p-1 shadow-[0_6px_18px_-12px_rgba(29,27,23,0.45)] [scrollbar-width:none]"
-        >
-          {[
-            ["act-read", "1 · Read the room"],
-            ["act-moves", "2 · The moves"],
-            ["act-premiere", "3 · Opening night"],
-          ].map(([id, label]) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              className="shrink-0 rounded-full px-2.5 py-1 text-[12.5px] text-ink-2 transition hover:bg-paper hover:text-ink sm:px-3 sm:text-[13px]"
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-      )}
+      {/* One compact row: it scrolls sideways on narrow phones instead of wrapping. */}
+      {p && !running && <SectionNav items={ACTS} />}
 
       {(domains.length > 0 || live.demographics) && (
         <ActHeader id="act-read" n={1} title="Read the room" subtitle="Who your guests are and what they love, straight from Qloo’s taste graph." />
@@ -200,25 +231,25 @@ export default function PlaybookView({
               domains={live.dna}
             />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <InViewGroup amount={0.15} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {domains.map((d) => (
-              <div key={d} className="min-w-0 rounded-xl border border-line bg-paper/50 p-4">
+              <div key={d} className="lift min-w-0 rounded-xl border border-line bg-paper/50 p-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
                   {DOMAIN_LABEL[d] ?? d}
                 </p>
                 <ul className="space-y-1.5">
-                  {live.dna[d].slice(0, 6).map((e) => (
+                  {live.dna[d].slice(0, 6).map((e, i) => (
                     <li key={e.entity_id} className="flex items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-sm" title={e.subtitle}>
                         {e.name}
                       </span>
-                      <AffinityBar value={e.affinity} />
+                      <AffinityBar value={e.affinity} index={i} />
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
-          </div>
+          </InViewGroup>
           <p className="mt-3 text-[11px] leading-snug text-muted">
             Scores (0–100) come straight from Qloo’s taste graph. They describe what people who like this restaurant tend to like, in
             aggregate, not what any one guest will do.
@@ -234,33 +265,7 @@ export default function PlaybookView({
         <Section icon={<IconPlate size={16} />} kicker="Cravings & crowd" title="What they crave, and who they are">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-              {live.crowdMenu && live.crowdMenu.favours.length > 0 && (
-                <div className="rounded-xl border border-olive/25 bg-olive/5 p-4" title={LIFT_HELP}>
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">On your crowd’s menus</p>
-                  <p className="mb-2 text-[11px] leading-snug text-muted">
-                    Menus at the {live.crowdMenu.crowd_n} restaurants your guests love most vs {live.crowdMenu.city}’s {live.crowdMenu.city_n} most
-                    popular (Qloo)
-                  </p>
-                  <ul className="space-y-1.5">
-                    {live.crowdMenu.favours.slice(0, 6).map((t) => (
-                      <li key={t.term} className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 text-sm leading-snug">{t.term}</span>
-                        <span
-                          className="shrink-0 text-[11px] font-semibold tabular-nums text-olive"
-                          title={`On ${t.crowd} of the ${live.crowdMenu!.crowd_n} restaurants your guests love most vs ${t.city} of ${live.crowdMenu!.city_n}`}
-                        >
-                          {liftLabel(t.lift)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  {live.crowdMenu.avoids.length > 0 && (
-                    <p className="mt-2 text-[11px] leading-snug text-muted">
-                      Rarer with your crowd: {live.crowdMenu.avoids.slice(0, 4).map((t) => t.term).join(" · ")}
-                    </p>
-                  )}
-                </div>
-              )}
+              {live.crowdMenu && live.crowdMenu.favours.length > 0 && <CrowdMenu data={live.crowdMenu} />}
               {(["dishes", "cuisines", "ambience"] as const)
                 .filter((fam) => !(fam === "dishes" && live.crowdMenu?.favours.length))
                 .map((fam) =>
@@ -365,7 +370,7 @@ export default function PlaybookView({
             <Section icon={<IconGap size={16} />} kicker="Taste gaps" title="What locals love that you don’t serve yet">
               <ul className="grid gap-3 md:grid-cols-2">
                 {p.taste_gaps.map((g) => (
-                  <li key={g.tag} className="rounded-xl border border-line bg-paper/50 p-4">
+                  <li key={g.tag} className="lift rounded-xl border border-line bg-paper/50 p-4">
                     <Pill tone="terracotta">{g.tag}</Pill>
                     <p className="mt-2 text-sm leading-snug">{g.opportunity}</p>
                     <p className="mt-1.5 text-[12px] leading-snug text-muted">{g.evidence}</p>
@@ -377,31 +382,53 @@ export default function PlaybookView({
 
           <Section icon={<IconPlate size={16} />} kicker="Menu moves" title="Three dishes to test next week">
             <div className="grid gap-4 lg:grid-cols-3">
-              {p.menu_moves.map((m) => {
+              {p.menu_moves.map((mv, n) => {
                 const cl = p.crowd_lift;
                 return (
-                <article key={m.dish} className="flex flex-col rounded-xl border border-line bg-paper/40 p-4">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <div className="flex items-baseline gap-2">
-                      <h4 className="font-display text-lg leading-tight">{m.dish}</h4>
-                      {m.lift != null && cl && (
-                        <span
-                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${m.lift >= 1 ? "bg-olive/10 text-olive" : "bg-terracotta/10 text-terracotta"}`}
-                          title={[`Crowd lift for this dish: ${liftLabel(m.lift)}`, ...(m.lift_terms ?? []).map((t) => termLine(t, cl))].join("\n")}
-                        >
-                          {liftLabel(m.lift)}
-                        </span>
-                      )}
-                    </div>
+                <m.article
+                  key={mv.dish}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.55, ease: EASE_OUT, delay: n * 0.08 }}
+                  data-reveal
+                  className="flex flex-col"
+                >
+                <div className="lift flex flex-1 flex-col rounded-xl border border-line bg-paper/40 p-4">
+                  <h4 className="font-display text-lg leading-tight">{mv.dish}</h4>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    {mv.lift != null && cl ? (
+                      <InfoPopover
+                        label={`Crowd lift for this dish: ${liftLabel(mv.lift)}. Show the local menu counts`}
+                        title={`Crowd lift for this dish: ${liftLabel(mv.lift)}`}
+                        trigger={
+                          <>
+                            {liftLabel(mv.lift)}
+                            <span aria-hidden className="font-normal opacity-80">
+                              crowd lift
+                            </span>
+                          </>
+                        }
+                        className={`relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition hover:brightness-95 before:absolute before:-inset-3 before:content-[''] ${mv.lift >= 1 ? "bg-olive/10 text-olive" : "bg-terracotta/10 text-terracotta-ink"}`}
+                      >
+                        <ul className="space-y-1.5">
+                          {(mv.lift_terms ?? []).map((t) => (
+                            <li key={t.term}>{termLine(t, cl)}</li>
+                          ))}
+                        </ul>
+                      </InfoPopover>
+                    ) : (
+                      <span />
+                    )}
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-olive">
-                      {money(m.price, p.currency)}
+                      {money(mv.price, p.currency)}
                     </span>
                   </div>
-                  <p className="mt-1.5 text-sm leading-snug text-ink-2">{m.description}</p>
-                  {cl && m.lift_terms && m.lift_terms.length > 0 && (
-                    <p className="mt-1.5 text-[12px] leading-snug text-muted" title={LIFT_HELP}>
+                  <p className="mt-2 text-sm leading-snug text-ink-2">{mv.description}</p>
+                  {cl && mv.lift_terms && mv.lift_terms.length > 0 && (
+                    <p className="mt-1.5 text-[12px] leading-snug text-muted">
                       On local menus, your crowd’s vs the city’s:{" "}
-                      {m.lift_terms.map((t, i) => (
+                      {mv.lift_terms.map((t, i) => (
                         <span key={t.term}>
                           {i > 0 && " · "}
                           <span className="font-medium text-ink-2">{t.term}</span> {t.crowd} of {cl.crowd_n} vs {t.city} of {cl.city_n}
@@ -411,17 +438,18 @@ export default function PlaybookView({
                   )}
                   <p className="mt-3 text-[13px] leading-snug">
                     <span className="font-semibold">Our read: </span>
-                    {m.why}
+                    {mv.why}
                   </p>
-                  {m.evidence.length > 0 && (
-                    <ul className="mt-3 space-y-1 border-t border-line pt-3" aria-label="Qloo evidence">
+                  {mv.evidence.length > 0 && (
+                    <ul className="mt-3 space-y-1.5 border-t border-line pt-3" aria-label="Qloo evidence">
                       <li className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">Qloo evidence</li>
-                      {m.evidence.map((ev, i) => (
-                        <EvidenceLine key={`${m.dish}-${i}`} evidence={ev} />
+                      {mv.evidence.map((ev, i) => (
+                        <EvidenceLine key={`${mv.dish}-${i}`} evidence={ev} />
                       ))}
                     </ul>
                   )}
-                </article>
+                </div>
+                </m.article>
                 );
               })}
             </div>
@@ -484,7 +512,7 @@ export default function PlaybookView({
               icon={<IconMegaphone size={16} />}
               kicker="Local marketing"
               title="Ready-to-post"
-              aside={<CopyButton text={p.marketing.instagram_post} label="Copy post" />}
+              aside={<CopyButton text={p.marketing.instagram_post} label="Copy post" done="Post copied, ready to paste" />}
             >
               <p className="whitespace-pre-line rounded-xl border border-line bg-paper/50 p-4 text-sm leading-relaxed">
                 {p.marketing.instagram_post}
@@ -545,7 +573,7 @@ function FanMatch({ value }: { value: number }) {
 
 const DIRECTION: Record<TrendLine["direction"], { label: string; tone: string; stroke: string }> = {
   rising: { label: "Rising", tone: "border-olive/25 bg-olive/10 text-olive", stroke: "var(--olive)" },
-  falling: { label: "Falling", tone: "border-terracotta/25 bg-terracotta/10 text-terracotta", stroke: "var(--terracotta)" },
+  falling: { label: "Falling", tone: "border-terracotta/25 bg-terracotta/10 text-terracotta-ink", stroke: "var(--terracotta)" },
   steady: { label: "Steady", tone: "border-line bg-paper text-ink-2", stroke: "var(--muted)" },
   no_data: { label: "No data", tone: "border-line bg-paper text-muted", stroke: "var(--muted)" },
 };
@@ -702,11 +730,86 @@ function MatchNote({
 
 function ActHeader({ id, n, title, subtitle }: { id: string; n: number; title: string; subtitle: string }) {
   return (
-    <header id={id} className="scroll-mt-16 pt-4">
-      <p className="font-display text-sm text-terracotta">Act {n}</p>
-      <h2 className="font-display text-3xl leading-tight sm:text-4xl">{title}</h2>
-      <p className="mt-1 max-w-2xl text-sm text-ink-2">{subtitle}</p>
+    <header id={id} className="scroll-mt-20 pt-6">
+      <InViewGroup amount={0.5} className="flex items-center gap-3">
+        <p className="font-display shrink-0 text-sm text-terracotta-ink">Act {n}</p>
+        <span aria-hidden className="bar-fill h-px flex-1 bg-line" />
+      </InViewGroup>
+      <KineticText as="h2" trigger="view" text={title} className="font-display mt-1 text-3xl leading-tight sm:text-4xl" />
+      <Reveal delay={0.15}>
+        <p className="mt-1 max-w-2xl text-sm text-ink-2">{subtitle}</p>
+      </Reveal>
     </header>
+  );
+}
+
+// Crowd vs city, term by term: the share of the crowd's favourite restaurants whose menus carry
+// the term (olive) against the share of the city's most popular ones (grey), drawn to one scale.
+function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
+  const rows = data.favours.slice(0, 6);
+  const share = (n: number, of: number) => (of > 0 ? n / of : 0);
+  const top = Math.max(1e-6, ...rows.flatMap((t) => [share(t.crowd, data.crowd_n), share(t.city, data.city_n)]));
+  const width = (v: number) => `${(v / top) * 100}%`;
+  return (
+    <div className="rounded-xl border border-olive/25 bg-olive/5 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">On your crowd’s menus</p>
+      <p className="mb-2 text-[11px] leading-snug text-muted">
+        Menus at the {data.crowd_n} restaurants your guests love most vs {data.city}’s {data.city_n} most popular (Qloo)
+      </p>
+      <p aria-hidden className="mb-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-olive" /> Your crowd
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-ink-2/35" /> The city
+        </span>
+      </p>
+      <InViewGroup amount={0.2}>
+        <ul className="space-y-2.5">
+          {rows.map((t, i) => (
+            <li key={t.term}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="min-w-0 text-sm leading-snug">{t.term}</span>
+                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-olive">{liftLabel(t.lift)}</span>
+              </div>
+              <div aria-hidden className="mt-1 grid grid-cols-[1fr_3rem] items-center gap-x-2 gap-y-0.5 text-right text-[10px] tabular-nums text-muted">
+                <span className="h-1.5 overflow-hidden rounded-full bg-paper-2">
+                  <span
+                    className="bar-fill block h-full rounded-full bg-olive"
+                    style={{ width: width(share(t.crowd, data.crowd_n)), "--i": i } as React.CSSProperties}
+                  />
+                </span>
+                <span>
+                  {t.crowd}/{data.crowd_n}
+                </span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-paper-2">
+                  <span
+                    className="bar-fill block h-full rounded-full bg-ink-2/35"
+                    style={{ width: width(share(t.city, data.city_n)), "--i": i } as React.CSSProperties}
+                  />
+                </span>
+                <span>
+                  {t.city}/{data.city_n}
+                </span>
+              </div>
+              <span className="sr-only">
+                On {t.crowd} of the {data.crowd_n} restaurants your guests love most vs {t.city} of {data.city_n}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </InViewGroup>
+      {data.avoids.length > 0 && (
+        <p className="mt-2.5 text-[11px] leading-snug text-muted">
+          Rarer with your crowd: {data.avoids.slice(0, 4).map((t) => t.term).join(" · ")}
+        </p>
+      )}
+      <p className="mt-2 text-[11px]">
+        <HowLink label="How is this measured?" title="Crowd lift">
+          {LIFT_HELP}
+        </HowLink>
+      </p>
+    </div>
   );
 }
 
@@ -725,32 +828,68 @@ function DraftPreview({ draft }: { draft: Record<string, unknown> }) {
     { label: "7-day plan", done: Array.isArray(draft.week_plan) },
   ];
   return (
-    <section aria-live="polite" className="rise rounded-2xl border border-dashed border-olive/40 bg-card p-5 sm:p-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-olive">Drafting live</p>
-      {headline ? (
-        <p className="font-display mt-2 text-xl leading-snug sm:text-2xl">{headline}</p>
-      ) : (
-        <p className="mt-2 text-sm text-muted">The agent is writing your playbook…</p>
-      )}
+    <m.section
+      aria-live="polite"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: EASE_OUT }}
+      className="relative overflow-hidden rounded-2xl border border-dashed border-olive/40 bg-card p-5 sm:p-6"
+    >
+      <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-olive">
+        <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-olive" aria-hidden />
+        Drafting live
+      </p>
+      <AnimatePresence mode="wait" initial={false}>
+        {headline ? (
+          <m.p
+            key="headline"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: EASE_OUT }}
+            className="font-display mt-2 text-xl leading-snug sm:text-2xl"
+          >
+            {headline}
+          </m.p>
+        ) : (
+          <m.p key="waiting" exit={{ opacity: 0 }} className="mt-2 text-sm text-muted">
+            The agent is writing your playbook…
+          </m.p>
+        )}
+      </AnimatePresence>
       {moves.length > 0 && (
         <ul className="mt-4 flex flex-wrap gap-2">
-          {moves.map((m, i) =>
-            typeof m.dish === "string" && m.dish ? (
-              <li key={i} className="rounded-full border border-line bg-paper px-3 py-1 text-sm">
-                {m.dish}
-              </li>
+          {moves.map((mv, i) =>
+            typeof mv.dish === "string" && mv.dish ? (
+              <m.li
+                key={i}
+                initial={{ opacity: 0, scale: 0.92, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: EASE_OUT }}
+                className="rounded-full border border-line bg-paper px-3 py-1 text-sm"
+              >
+                {mv.dish}
+              </m.li>
             ) : null,
           )}
         </ul>
       )}
-      <ol className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+      <ol className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px]">
         {steps.map((st) => (
-          <li key={st.label} className={st.done ? "text-olive" : "text-muted"}>
-            {st.done ? "✓" : "○"} {st.label}
+          <li key={st.label} className={`inline-flex items-center gap-1.5 transition-colors duration-300 ${st.done ? "text-olive" : "text-muted"}`}>
+            <span
+              aria-hidden
+              className={`grid h-3.5 w-3.5 place-items-center rounded-full border text-[9px] leading-none transition-all duration-300 ${
+                st.done ? "scale-100 border-olive bg-olive text-paper" : "scale-90 border-line bg-card"
+              }`}
+            >
+              {st.done ? "✓" : ""}
+            </span>
+            <span className="sr-only">{st.done ? "Done:" : "To do:"}</span>
+            {st.label}
           </li>
         ))}
       </ol>
-    </section>
+    </m.section>
   );
 }
 
@@ -800,6 +939,7 @@ function WeekPlan({ playbook: p }: { playbook: Playbook }) {
     a.download = "tastecraft-launch-week.ics";
     a.click();
     URL.revokeObjectURL(url);
+    toast("Launch week saved as a calendar file");
   };
   return (
     <Section
@@ -810,7 +950,7 @@ function WeekPlan({ playbook: p }: { playbook: Playbook }) {
         <button
           type="button"
           onClick={download}
-          className="no-print inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
+          className="no-print inline-flex min-h-8 items-center gap-1.5 pointer-coarse:min-h-11 pointer-coarse:px-4 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink active:scale-[0.97]"
         >
           <IconDownload size={14} /> Add to calendar
         </button>
@@ -818,8 +958,8 @@ function WeekPlan({ playbook: p }: { playbook: Playbook }) {
     >
       <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((it, i) => (
-          <li key={`${it.day}-${i}`} className="rounded-xl border border-line bg-paper/50 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-terracotta">{it.day}</p>
+          <li key={`${it.day}-${i}`} className="lift rounded-xl border border-line bg-paper/50 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-terracotta-ink">{it.day}</p>
             <p className="mt-1 text-sm leading-snug">{it.action}</p>
             <p className="mt-1 text-[12px] text-muted">{it.owner}</p>
           </li>
@@ -841,32 +981,37 @@ const AGE_LABEL: Record<string, string> = {
 function Demographics({ data }: { data: { age: Record<string, number>; gender: Record<string, number> } }) {
   const ages = Object.keys(AGE_LABEL).filter((k) => k in data.age);
   const max = Math.max(0.01, ...Object.values(data.age).map(Math.abs), ...Object.values(data.gender).map(Math.abs));
-  const Row = ({ label, v }: { label: string; v: number }) => (
+  const Row = ({ label, v, i }: { label: string; v: number; i: number }) => (
     <li className="grid grid-cols-[52px_1fr] items-center gap-2 text-[12px]">
       <span className="text-ink-2">{label}</span>
       <span className="relative h-3">
         <span className="absolute left-1/2 top-0 h-full w-px bg-line" />
         <span
-          className={`absolute top-0.5 h-2 rounded-full ${v >= 0 ? "bg-olive" : "bg-terracotta/70"}`}
-          style={v >= 0 ? { left: "50%", width: `${(v / max) * 50}%` } : { right: "50%", width: `${(-v / max) * 50}%` }}
+          className={`bar-fill absolute top-0.5 h-2 rounded-full ${v >= 0 ? "bg-olive" : "from-right bg-terracotta/70"}`}
+          style={
+            {
+              ...(v >= 0 ? { left: "50%", width: `${(v / max) * 50}%` } : { right: "50%", width: `${(-v / max) * 50}%` }),
+              "--i": i,
+            } as unknown as React.CSSProperties
+          }
           title={`${v > 0 ? "+" : ""}${v.toFixed(2)}`}
         />
       </span>
     </li>
   );
   return (
-    <div className="rounded-xl border border-line bg-paper/50 p-4">
+    <InViewGroup className="rounded-xl border border-line bg-paper/50 p-4">
       <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Who over-indexes</p>
       <p className="mb-3 text-[11px] text-muted">Right = more than average, left = less (Qloo demographics)</p>
       <ul className="space-y-1.5">
-        {ages.map((k) => (
-          <Row key={k} label={AGE_LABEL[k]} v={data.age[k]} />
+        {ages.map((k, i) => (
+          <Row key={k} label={AGE_LABEL[k]} v={data.age[k]} i={i} />
         ))}
-        {Object.entries(data.gender).map(([g, v]) => (
-          <Row key={g} label={g === "female" ? "Women" : g === "male" ? "Men" : g} v={v} />
+        {Object.entries(data.gender).map(([g, v], i) => (
+          <Row key={g} label={g === "female" ? "Women" : g === "male" ? "Men" : g} v={v} i={ages.length + i} />
         ))}
       </ul>
-    </div>
+    </InViewGroup>
   );
 }
 
@@ -899,11 +1044,12 @@ function ShoppingList({ playbook: p }: { playbook: Playbook }) {
       title="What to buy for a one-week test"
       aside={
         <div className="flex flex-wrap justify-end gap-2">
-          <CopyButton text={emailText} label="Copy order email" />
+          <CopyButton text={emailText} label="Copy order email" done="Order email copied" />
           <a
             href={`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`}
             download={`tastecraft-shopping-list.csv`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
+            onClick={() => toast("Shopping list downloaded (CSV)")}
+            className="inline-flex min-h-8 items-center gap-1.5 pointer-coarse:min-h-11 pointer-coarse:px-4 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink active:scale-[0.97]"
           >
             <IconDownload size={14} /> CSV
           </a>
@@ -975,10 +1121,13 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
   return (
     <Section icon={<IconSpark size={16} />} kicker="Why taste data matters" title="Generic AI vs. Tastecraft">
       {cl?.score != null && generic?.score != null && (
-        <p className="mb-3 text-[13px] leading-snug text-ink-2" title={LIFT_HELP}>
-          Same crowd-lift formula on both sets of dishes: <span className="font-semibold text-terracotta">{liftLabel(generic.score)}</span> without
+        <p className="mb-3 text-[13px] leading-snug text-ink-2">
+          Same crowd-lift formula on both sets of dishes: <span className="font-semibold text-terracotta-ink">{liftLabel(generic.score)}</span> without
           Qloo vs <span className="font-semibold text-olive">{liftLabel(cl.score)}</span> with Qloo (×1.0 = no different from {cl.city}’s
-          most popular restaurants).
+          most popular restaurants).{" "}
+          <HowLink label="How is crowd lift measured?" title="Crowd lift">
+            {LIFT_HELP}
+          </HowLink>
         </p>
       )}
       <p className="mb-3 text-[12px] leading-snug text-muted">
@@ -996,7 +1145,7 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
         .
       </p>
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-line bg-paper/40 p-4">
+        <div className="lift rounded-xl border border-line bg-paper/40 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model, quick answer without Qloo</p>
           {generic?.score != null && (
             <p className="mt-1 text-[11px] font-semibold text-muted">
@@ -1020,7 +1169,7 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
             <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-2">{baseline}</p>
           )}
         </div>
-        <div className="rounded-xl border border-olive/30 bg-olive/5 p-4">
+        <div className="lift rounded-xl border border-olive/30 bg-olive/5 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">Tastecraft, grounded in Qloo</p>
           {cl?.score != null && (
             <p className="mt-1 text-[11px] font-semibold text-olive">
@@ -1028,10 +1177,10 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
             </p>
           )}
           <ul className="mt-2 space-y-2 text-sm leading-relaxed">
-            {p.menu_moves.map((m) => (
-              <li key={m.dish}>
-                <span className="font-semibold">{m.dish}</span>
-                {m.lift != null ? ` (${liftLabel(m.lift)})` : ""} — {m.evidence[0]?.text ?? m.why}
+            {p.menu_moves.map((mv) => (
+              <li key={mv.dish}>
+                <span className="font-semibold">{mv.dish}</span>
+                {mv.lift != null ? ` (${liftLabel(mv.lift)})` : ""} — {mv.evidence[0]?.text ?? mv.why}
               </li>
             ))}
             {p.taste_gaps[0] && (

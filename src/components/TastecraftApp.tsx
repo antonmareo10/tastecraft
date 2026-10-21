@@ -1,13 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { m } from "motion/react";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
 import { readNdjson } from "@/lib/ndjson";
-import Timeline, { type Step, type TimelineItem } from "./Timeline";
-import PlaybookView, { type LiveState } from "./PlaybookView";
-import FollowUp from "./FollowUp";
-import { IconArrow, IconSearch } from "./icons";
+import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
+import { scrollToElement } from "@/lib/scroll";
+import type { Step, TimelineItem } from "./Timeline";
+import type { LiveState } from "./PlaybookView";
+import HeroLight from "./HeroLight";
+import ReplayCards, { type DemoSummary } from "./ReplayCards";
+import { CountUp, KineticText, MagneticButton, Reveal } from "./fx";
+import { IconAlert, IconArrow } from "./icons";
+
+export type { DemoSummary };
 
 const GOALS = [
   "Fill quiet weeknights",
@@ -23,11 +31,34 @@ const SAMPLES: AgentRequest[] = [
   { restaurant: "Casa Lucio", city: "Madrid", goal: "Launch a new seasonal special" },
 ];
 
+// The data and tools behind every playbook, for the footer.
+const CREDITS = [
+  "Built for the Qloo Agentic Hackathon",
+  "Taste data by Qloo",
+  "Reasoning by Claude",
+  "Maps © OpenStreetMap contributors",
+  "Concerts via Ticketmaster",
+];
+
+const HEADLINE = "Know who loves your restaurant, and what they crave.";
+
+// The agent's workspace (log, playbook, constellation, share images, follow-up) is only needed once a
+// run starts, so it loads on demand: warmed as soon as the visitor reaches for the form or a replay.
+const loadTimeline = () => import("./Timeline");
+const loadPlaybook = () => import("./PlaybookView");
+const loadFollowUp = () => import("./FollowUp");
+const Timeline = dynamic(loadTimeline, { loading: () => <div className="shimmer h-64 rounded-2xl border border-line bg-card" /> });
+const PlaybookView = dynamic(loadPlaybook, { loading: () => <SkeletonCards /> });
+const FollowUp = dynamic(loadFollowUp);
+const warmWorkspace = () => {
+  void loadTimeline();
+  void loadPlaybook();
+  void loadFollowUp();
+};
+
 type Phase = "idle" | "running" | "done" | "error";
 
 const timestamp = () => Date.now();
-
-export type DemoSummary = { slug: string; restaurant: string; city: string; goal?: string; recordedAt: string };
 
 export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] }) {
   const [form, setForm] = useState<AgentRequest>({ restaurant: "", city: "", goal: GOALS[0], language: "English" });
@@ -53,6 +84,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
 
   async function run(req: AgentRequest, demo?: DemoSummary) {
     if (!req.restaurant.trim() || !req.city.trim()) return;
+    warmWorkspace();
     setReplay(demo ?? null);
     setLogOpen(false);
     abortRef.current?.abort();
@@ -64,7 +96,10 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
     const t0 = timestamp();
     setStartedAt(t0);
     setNow(t0);
-    requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    // The form hands over to the agent's workspace: one continuous glide down to it.
+    requestAnimationFrame(() => {
+      if (resultsRef.current) scrollToElement(resultsRef.current, 16);
+    });
     try {
       const res = demo
         ? await fetch(`/api/demo/${demo.slug}`, { signal: controller.signal })
@@ -97,35 +132,54 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
   }
 
   const started = phase !== "idle";
+  const running = phase === "running";
   // On phones the agent log sits above the playbook; once the run is over it folds into one line so
   // the playbook's headline comes first. Desktop keeps it open in the sidebar.
   const logFolded = phase === "done" && !logOpen;
   const stepCount = items.filter((i) => i.kind === "step").length;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="relative isolate flex min-h-screen flex-col overflow-x-clip">
+      <HeroLight className="absolute inset-x-0 top-0 -z-10 h-[760px] w-full sm:h-[880px]" />
+      {/* The resting light where the cursor one is off (touch screens, reduced motion): plain CSS. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-[38%] top-0 -z-10 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(221,154,46,0.17),rgba(192,83,44,0.05)_45%,transparent_68%)] [@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:hidden"
+      />
+
       <header className="no-print mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Tastecraft home">
+        <Link href="/" className="group flex items-center gap-2.5 pointer-coarse:min-h-11" aria-label="Tastecraft home">
           <Logo />
           <span className="font-display text-xl tracking-tight">Tastecraft</span>
         </Link>
         <nav className="flex items-center gap-4 text-xs text-muted">
           <span className="hidden sm:inline">Qloo taste graph × Claude</span>
-          <Link href="/about" className="rounded-full border border-line px-3 py-1 text-ink-2 transition hover:border-ink-2/40 hover:text-ink">
+          <Link
+            href="/about"
+            className="inline-flex min-h-9 items-center rounded-full border border-line bg-card/70 px-3.5 py-1 text-ink-2 backdrop-blur transition hover:border-ink-2/40 hover:text-ink pointer-coarse:min-h-11 pointer-coarse:px-4"
+          >
             About
           </Link>
         </nav>
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-20 sm:px-6">
-        <section className={`no-print grid gap-10 ${started ? "py-4" : "py-10 sm:py-16"} lg:grid-cols-[1.1fr_1fr] lg:items-center`}>
+        <section
+          onPointerOver={warmWorkspace}
+          onFocusCapture={warmWorkspace}
+          onTouchStartCapture={warmWorkspace}
+          className={`no-print grid gap-10 ${started ? "py-4" : "py-10 sm:py-16"} lg:grid-cols-[1.1fr_1fr] lg:items-center`}
+        >
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta">
-              For independent restaurants
-            </p>
-            <h1 className="font-display mt-3 text-4xl leading-[1.05] tracking-tight sm:text-6xl">
-              Know what your neighborhood is hungry for.
-            </h1>
+            <p className="fade-up text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta-ink">For independent restaurants</p>
+            <KineticText
+              as="h1"
+              text={HEADLINE}
+              delayMs={60}
+              className="font-display mt-3 text-[2.6rem] leading-[1.04] tracking-tight sm:text-6xl"
+              accent={(word, i) => (i === HEADLINE.split(" ").length - 1 ? <Squiggle word={word} /> : null)}
+            />
+            {/* Static on purpose: readable from the first frame while the headline animates. */}
             <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink-2">
               Chains have insight teams. You have Tastecraft: an AI agent that reads Qloo’s taste graph around your
               restaurant and turns it into menu moves, events, local marketing and a supplier shopping list, with the
@@ -133,27 +187,23 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
             </p>
             {/* Phones: the replay buttons in the form are a screen and a half down, so offer them here too. */}
             {!started && demos.length > 0 && (
-              <div className="mt-5 lg:hidden">
+              <div className="fade-up mt-6 lg:hidden" style={{ "--d": "480ms" } as React.CSSProperties}>
                 <p className="text-[13px] font-medium text-ink">Watch a real recorded run, replayed in about 15 seconds:</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {demos.map((d) => (
-                    <button
-                      key={d.slug}
-                      type="button"
-                      onClick={() => playDemo(d)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-olive/30 bg-olive/5 px-3 py-1.5 text-[13px] font-medium text-olive transition hover:bg-olive/10"
-                    >
-                      {d.restaurant} <IconArrow size={12} />
-                    </button>
-                  ))}
-                </div>
+                <ReplayCards demos={demos} onPlay={playDemo} variant="list" />
               </div>
             )}
             {!started && (
-              <div className="mt-7 flex max-w-xl items-center gap-5 rounded-2xl border border-line bg-card p-4 sm:p-5">
+              <div
+                className="fade-up mt-7 flex max-w-xl items-center gap-5 rounded-2xl border border-line bg-card/90 p-4 shadow-[0_18px_40px_-30px_rgba(29,27,23,0.35)] backdrop-blur-sm sm:p-5"
+                style={{ "--d": "560ms" } as React.CSSProperties}
+              >
                 <div className="shrink-0 text-center">
-                  <div className="font-display text-5xl leading-none text-olive tabular-nums">×1.15</div>
-                  <div className="mt-1 text-[11px] text-muted">vs ×0.90 without Qloo</div>
+                  <div className="font-display text-5xl leading-none text-olive">
+                    <CountUp value={1.15} decimals={2} prefix="×" delay={500} duration={1300} skipAfterMs={1600} />
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted">
+                    vs <CountUp value={0.9} decimals={2} prefix="×" delay={500} duration={1300} skipAfterMs={1600} /> without Qloo
+                  </div>
                 </div>
                 <p className="text-[13px] leading-snug text-ink-2">
                   <span className="font-semibold text-ink">Crowd lift, measured on restaurants the model never saw.</span> Given
@@ -178,7 +228,8 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
               e.preventDefault();
               run(form);
             }}
-            className="rounded-2xl border border-line bg-card p-5 shadow-[0_1px_0_rgba(29,27,23,0.04),0_18px_40px_-28px_rgba(29,27,23,0.35)] sm:p-6"
+            className="fade-up rounded-2xl border border-line bg-card p-5 shadow-[0_1px_0_rgba(29,27,23,0.04),0_24px_50px_-30px_rgba(29,27,23,0.4)] sm:p-6"
+            style={{ "--d": "200ms" } as React.CSSProperties}
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Restaurant">
@@ -187,7 +238,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                   value={form.restaurant}
                   onChange={(e) => setForm({ ...form, restaurant: e.target.value, entity_id: undefined })}
                   placeholder="e.g. Casa Lucio"
-                  className="w-full rounded-lg border border-line bg-paper/60 px-3 py-2.5 text-[15px] outline-none transition focus:border-olive focus:bg-card"
+                  className="w-full rounded-lg border border-line bg-paper/60 px-3 py-2.5 text-[15px] outline-none transition focus:border-olive focus:bg-card focus-visible:ring-4 focus-visible:ring-olive/15"
                 />
               </Field>
               <Field label="City">
@@ -196,7 +247,7 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value, entity_id: undefined })}
                   placeholder="e.g. Madrid"
-                  className="w-full rounded-lg border border-line bg-paper/60 px-3 py-2.5 text-[15px] outline-none transition focus:border-olive focus:bg-card"
+                  className="w-full rounded-lg border border-line bg-paper/60 px-3 py-2.5 text-[15px] outline-none transition focus:border-olive focus:bg-card focus-visible:ring-4 focus-visible:ring-olive/15"
                 />
               </Field>
             </div>
@@ -209,10 +260,10 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                     type="button"
                     aria-pressed={form.goal === g}
                     onClick={() => setForm({ ...form, goal: g })}
-                    className={`rounded-full border px-3 py-1.5 text-[13px] transition ${
+                    className={`rounded-full border px-3 py-1.5 text-[13px] transition duration-200 active:scale-[0.97] pointer-coarse:min-h-11 ${
                       form.goal === g
                         ? "border-olive bg-olive text-paper"
-                        : "border-line bg-paper/60 text-ink-2 hover:border-ink-2/40"
+                        : "border-line bg-paper/60 text-ink-2 hover:border-ink-2/40 hover:text-ink"
                     }`}
                   >
                     {g}
@@ -230,60 +281,75 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                     role="radio"
                     aria-checked={(form.language ?? "English") === l}
                     onClick={() => setForm({ ...form, language: l })}
-                    className={`rounded-full px-3 py-1 transition ${(form.language ?? "English") === l ? "bg-ink text-paper" : "text-ink-2 hover:text-ink"}`}
+                    className={`rounded-full px-3 py-1 transition pointer-coarse:min-h-10 pointer-coarse:px-4 ${(form.language ?? "English") === l ? "bg-ink text-paper" : "text-ink-2 hover:text-ink"}`}
                   >
                     {l}
                   </button>
                 ))}
               </div>
             </div>
-            <button
+            <MagneticButton
               type="submit"
-              disabled={phase === "running"}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-5 py-3 text-[15px] font-medium text-paper transition hover:bg-olive disabled:cursor-wait disabled:opacity-70"
+              disabled={running}
+              className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-5 py-3.5 text-[15px] font-medium text-paper transition-colors duration-300 hover:bg-olive disabled:cursor-wait disabled:opacity-70"
             >
-              {phase === "running" ? (
+              {running ? (
                 <>
                   <span className="pulse-dot h-2 w-2 rounded-full bg-saffron" /> Reading the taste graph…
                 </>
               ) : (
                 <>
-                  <IconSearch size={17} /> Build my taste playbook
+                  Build my taste playbook
+                  <IconArrow size={16} className="transition-transform duration-300 ease-out group-hover:translate-x-1" />
                 </>
               )}
-            </button>
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
-              <span>{demos.length ? "Instant replays of real runs:" : "Try:"}</span>
-              {(demos.length ? demos : SAMPLES).map((s) => (
-                <button
-                  key={s.restaurant}
-                  type="button"
-                  onClick={() => {
-                    if ("slug" in s) return playDemo(s);
-                    const req = { restaurant: s.restaurant, city: s.city, goal: s.goal };
-                    setForm(req);
-                    run(req);
-                  }}
-                  disabled={phase === "running"}
-                  className="inline-flex items-center gap-1 text-ink-2 underline decoration-line underline-offset-4 hover:text-ink hover:decoration-ink-2"
-                >
-                  {s.restaurant}, {s.city} <IconArrow size={12} />
-                </button>
-              ))}
+            </MagneticButton>
+            <div className={`mt-5 border-t border-line pt-4 ${started ? "" : "hidden lg:block"}`}>
+              {demos.length ? (
+                <>
+                  <p className="mb-2.5 text-[13px] font-medium text-ink">Instant replays of real runs</p>
+                  <ReplayCards demos={demos} onPlay={playDemo} disabled={running} variant="grid" />
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
+                  <span>Try:</span>
+                  {SAMPLES.map((s) => (
+                    <button
+                      key={s.restaurant}
+                      type="button"
+                      onClick={() => {
+                        const req = { restaurant: s.restaurant, city: s.city, goal: s.goal };
+                        setForm(req);
+                        run(req);
+                      }}
+                      disabled={running}
+                      className="group inline-flex items-center gap-1 text-ink-2 underline decoration-line underline-offset-4 hover:text-ink hover:decoration-ink-2"
+                    >
+                      {s.restaurant}, {s.city} <IconArrow size={12} className="transition-transform group-hover:translate-x-0.5" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2.5 text-[12px] text-muted">
+                {demos.length
+                  ? "Replays are recorded real runs, sped up. A live run reads Qloo for about 2 minutes."
+                  : "A live run reads Qloo for about 2 minutes."}
+              </p>
             </div>
-            <p className="mt-2 text-[12px] text-muted">
-              {demos.length
-                ? "Replays are recorded real runs, sped up. A live run reads Qloo for about 2 minutes."
-                : "A live run reads Qloo for about 2 minutes."}
-            </p>
           </form>
         </section>
 
         {!started && <HowItWorks />}
 
-        <div ref={resultsRef} className="scroll-mt-4">
+        {/* At least a screen tall once a run starts, so the glide down to it is never cut short. */}
+        <div ref={resultsRef} className={started ? "min-h-screen" : undefined}>
           {started && (
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start">
+            <m.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: EASE_OUT }}
+              className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start"
+            >
               <div className="no-print min-w-0 lg:sticky lg:top-4">
                 {logFolded && (
                   <button
@@ -298,57 +364,71 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                         {stepCount} steps in {(elapsed / 1000).toFixed(0)} s · show how Tastecraft got here
                       </span>
                     </span>
-                    <span aria-hidden className="text-lg leading-none text-ink-2">
+                    <span aria-hidden className="grid h-8 w-8 place-items-center rounded-full border border-line text-lg leading-none text-ink-2">
                       +
                     </span>
                   </button>
                 )}
                 <div className={logFolded ? "hidden lg:block" : undefined}>
-                  <Timeline items={items} running={phase === "running"} elapsedMs={elapsed} />
+                  <Timeline items={items} running={running} elapsedMs={elapsed} />
                 </div>
               </div>
               <div className="min-w-0">
                 {replay && (
-                  <p className="mb-4 rounded-xl border border-line bg-card px-4 py-2.5 text-[13px] text-ink-2">
-                    Instant replay of a real Tastecraft run recorded on{" "}
-                    {new Date(replay.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{" "}
-                    (live Qloo + Claude data, sped up). Use the form to run it live for any restaurant.
+                  <p className="mb-4 flex items-start gap-2.5 rounded-xl border border-line bg-card px-4 py-2.5 text-[13px] text-ink-2">
+                    <span className="rec-dot mt-1.5 shrink-0" aria-hidden />
+                    <span>
+                      Instant replay of a real Tastecraft run recorded on{" "}
+                      {new Date(replay.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{" "}
+                      (live Qloo + Claude data, sped up). Use the form to run it live for any restaurant.
+                    </span>
                   </p>
                 )}
                 {error && (
-                  <div role="alert" className="mb-5 rounded-2xl border border-terracotta/30 bg-terracotta/5 px-5 py-4 text-sm">
-                    <p className="font-semibold text-terracotta">The agent hit a problem</p>
-                    <p className="mt-1 text-ink-2">{error}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => run(form)}
-                        className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium"
-                      >
-                        Try again
-                      </button>
-                      {/* If live mode is down or busy, a judge can still see a real run instantly. */}
-                      {demos.length > 0 && (
-                        <>
-                          <span className="text-xs text-muted">or watch a recorded real run:</span>
-                          {demos.slice(0, 3).map((d) => (
-                            <button
-                              key={d.slug}
-                              type="button"
-                              onClick={() => playDemo(d)}
-                              className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink"
-                            >
-                              {d.restaurant} →
-                            </button>
-                          ))}
-                        </>
-                      )}
+                  <m.div
+                    role="alert"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: EASE_OUT }}
+                    className="mb-5 flex gap-3.5 rounded-2xl border border-terracotta/30 bg-terracotta/5 px-5 py-4 text-sm"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-terracotta/10 text-terracotta">
+                      <IconAlert size={17} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-terracotta-ink">The agent hit a problem</p>
+                      <p className="mt-1 text-ink-2">{error}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => run(form)}
+                          className="min-h-8 rounded-full border border-ink bg-ink px-3.5 py-1.5 text-xs font-medium text-paper transition hover:bg-olive"
+                        >
+                          Try again
+                        </button>
+                        {/* If live mode is down or busy, a judge can still see a real run instantly. */}
+                        {demos.length > 0 && (
+                          <>
+                            <span className="text-xs text-muted">or watch a recorded real run:</span>
+                            {demos.slice(0, 3).map((d) => (
+                              <button
+                                key={d.slug}
+                                type="button"
+                                onClick={() => playDemo(d)}
+                                className="min-h-8 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-ink-2/40 hover:text-ink"
+                              >
+                                {d.restaurant} →
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </m.div>
                 )}
                 <PlaybookView
                   live={live}
-                  running={phase === "running"}
+                  running={running}
                   language={form.language}
                   onPickAlternative={
                     replay
@@ -370,15 +450,28 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
                     />
                   </div>
                 )}
-                {phase === "running" && !live.restaurant && !error && <SkeletonCards />}
+                {running && !live.restaurant && !error && <SkeletonCards />}
               </div>
-            </div>
+            </m.div>
           )}
         </div>
       </main>
 
-      <footer className="no-print border-t border-line py-6 text-center text-xs text-muted">
-        Built for the Qloo Agentic Hackathon · Taste data by Qloo · Reasoning by Claude
+      <footer className="no-print border-t border-line py-6 text-xs text-muted">
+        <div className="marquee overflow-hidden">
+          <div className="marquee-track">
+            {[0, 1].map((copy) => (
+              <ul key={copy} aria-hidden={copy === 1 ? true : undefined} className={`flex shrink-0 items-center ${copy ? "marquee-dup" : ""}`}>
+                {CREDITS.map((c) => (
+                  <li key={c} className="flex items-center gap-6 whitespace-nowrap px-3">
+                    <span aria-hidden className="h-1 w-1 rounded-full bg-saffron" />
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            ))}
+          </div>
+        </div>
       </footer>
     </div>
   );
@@ -479,12 +572,47 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// The headline's last word gets a hand-drawn saffron stroke that draws in after the words land.
+function Squiggle({ word }: { word: string }) {
+  const bare = word.replace(/[.,!?]+$/, "");
+  return (
+    <>
+      <span className="relative inline-block">
+        {bare}
+        <svg
+          aria-hidden
+          viewBox="0 0 200 14"
+          preserveAspectRatio="none"
+          className="squiggle pointer-events-none absolute -bottom-[0.1em] left-[-2%] h-[0.22em] w-[104%] overflow-visible text-saffron"
+        >
+          <path
+            d="M3 9 C 40 3, 70 13, 104 7 S 165 3, 197 8"
+            pathLength={1}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </span>
+      {word.slice(bare.length)}
+    </>
+  );
+}
+
 function Logo() {
   return (
     <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden>
       <circle cx="16" cy="16" r="15" fill="#2f4a35" />
       <circle cx="16" cy="16" r="9.5" fill="none" stroke="#f6f1e7" strokeWidth="1.6" />
-      <path d="M16 6.5v19M6.5 16h19" stroke="#dd9a2e" strokeWidth="1.6" strokeLinecap="round" />
+      <path
+        d="M16 6.5v19M6.5 16h19"
+        stroke="#dd9a2e"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        className="origin-center transition-transform duration-500 ease-out group-hover:rotate-45 motion-reduce:transition-none"
+      />
       <circle cx="16" cy="16" r="3" fill="#c0532c" />
     </svg>
   );
@@ -498,24 +626,52 @@ function HowItWorks() {
     ["Act", "Turns it into three dishes to test, an event, a ready-to-post campaign and a supplier shopping list."],
   ];
   return (
-    <section aria-label="How it works" className="grid gap-4 border-t border-line py-10 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label="How it works" className="grid gap-6 border-t border-line py-10 sm:grid-cols-2 lg:grid-cols-4">
       {steps.map(([t, d], i) => (
-        <div key={t}>
+        <Reveal key={t} delay={i * STAGGER * 1.6}>
           <p className="font-display text-3xl text-terracotta">{String(i + 1).padStart(2, "0")}</p>
           <p className="mt-1 font-semibold">{t}</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-2">{d}</p>
-        </div>
+        </Reveal>
       ))}
     </section>
   );
 }
 
+// Shaped like what is about to arrive: the playbook's olive header and a section card.
 function SkeletonCards() {
   return (
-    <div className="space-y-5" aria-hidden>
-      {[180, 260, 220].map((h) => (
-        <div key={h} className="animate-pulse rounded-2xl border border-line bg-card" style={{ height: h }} />
-      ))}
-    </div>
+    <m.div
+      aria-hidden
+      initial="hidden"
+      animate="shown"
+      variants={REVEAL}
+      className="space-y-5"
+    >
+      <div className="shimmer rounded-2xl bg-olive px-6 py-6 sm:px-8 sm:py-8">
+        <div className="h-2.5 w-28 rounded-full bg-paper/25" />
+        <div className="mt-3 h-8 w-56 max-w-full rounded-lg bg-paper/30" />
+        <div className="mt-2.5 h-3 w-80 max-w-full rounded-full bg-paper/20" />
+        <div className="mt-4 flex gap-1.5">
+          {[64, 92, 56, 76].map((w) => (
+            <div key={w} className="h-5 rounded-full bg-paper/15" style={{ width: w }} />
+          ))}
+        </div>
+      </div>
+      <div className="shimmer rounded-2xl border border-line bg-card p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full bg-paper-2" />
+          <div>
+            <div className="h-2.5 w-24 rounded-full bg-paper-2" />
+            <div className="mt-2 h-5 w-52 max-w-full rounded-md bg-paper-2" />
+          </div>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-28 rounded-xl bg-paper-2/70" />
+          ))}
+        </div>
+      </div>
+    </m.div>
   );
 }

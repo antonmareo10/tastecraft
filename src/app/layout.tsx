@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
+import Providers from "@/components/Providers";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const fraunces = Fraunces({
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "/",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Tastecraft home page: Know what your neighborhood is hungry for." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Tastecraft home page: Know who loves your restaurant, and what they crave." }],
   },
   twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.png"] },
 };
@@ -35,7 +36,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

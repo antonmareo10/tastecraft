@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { CountUp, KineticText, Reveal } from "@/components/fx";
 
 export const metadata: Metadata = {
   title: "About · Tastecraft",
@@ -16,21 +18,44 @@ const SOURCES = {
 export default function About() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 pb-24 pt-6 sm:px-6">
-      <Link href="/" className="text-sm text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">
-        ← Back to Tastecraft
+      <Link
+        href="/"
+        className="group inline-flex min-h-9 items-center gap-1.5 text-sm text-ink-2 underline decoration-line underline-offset-4 hover:text-ink"
+      >
+        <span aria-hidden className="transition-transform duration-300 group-hover:-translate-x-1">
+          ←
+        </span>
+        Back to Tastecraft
       </Link>
 
       <header className="mt-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta">About</p>
-        <h1 className="font-display mt-3 text-4xl leading-[1.05] tracking-tight sm:text-5xl">
-          The cultural intelligence chains buy, for the restaurants that can’t.
-        </h1>
+        <p className="fade-up text-[11px] font-semibold uppercase tracking-[0.18em] text-terracotta-ink">About</p>
+        <KineticText
+          as="h1"
+          text="The cultural intelligence chains buy, for the restaurants that can’t."
+          className="font-display mt-3 text-4xl leading-[1.05] tracking-tight sm:text-5xl"
+        />
       </header>
 
       <section className="mt-12 grid gap-4 sm:grid-cols-3">
-        <Stat value="412,498" label="independent restaurants left in the US at the end of 2025" href={SOURCES.technomic} />
-        <Stat value="−2.3%" label="independents lost in 2025 — about 9,500 closures — while chains grew 1.4%" href={SOURCES.nrn} />
-        <Stat value="7 in 10" label="US restaurants are single-unit operations, with no insight team" href={SOURCES.nra} />
+        <Stat
+          value={<CountUp value={412498} grouping duration={1400} />}
+          label="independent restaurants left in the US at the end of 2025"
+          href={SOURCES.technomic}
+          index={0}
+        />
+        <Stat
+          value={<CountUp value={2.3} decimals={1} prefix="−" suffix="%" duration={1200} />}
+          label="independents lost in 2025 — about 9,500 closures — while chains grew 1.4%"
+          href={SOURCES.nrn}
+          index={1}
+        />
+        <Stat
+          value={<CountUp value={7} suffix=" in 10" duration={1000} />}
+          label="US restaurants are single-unit operations, with no insight team"
+          href={SOURCES.nra}
+          index={2}
+        />
       </section>
 
       <Block title="The problem">
@@ -124,21 +149,30 @@ export default function About() {
   );
 }
 
-function Stat({ value, label, href }: { value: string; label: string; href: string }) {
+function Stat({ value, label, href, index }: { value: ReactNode; label: string; href: string; index: number }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className="block rounded-2xl border border-line bg-card p-5 transition hover:border-ink-2/30">
-      <p className="font-display text-4xl text-olive">{value}</p>
-      <p className="mt-2 text-sm leading-snug text-ink-2">{label}</p>
-      <p className="mt-3 text-[11px] text-muted underline underline-offset-2">Source</p>
-    </a>
+    <Reveal delay={index * 0.08} className="h-full">
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="lift block h-full rounded-2xl border border-line bg-card p-5 hover:border-ink-2/30"
+      >
+        <p className="font-display text-4xl text-olive">{value}</p>
+        <p className="mt-2 text-sm leading-snug text-ink-2">{label}</p>
+        <p className="mt-3 text-[11px] text-muted underline underline-offset-2">Source</p>
+      </a>
+    </Reveal>
   );
 }
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-12">
-      <h2 className="font-display text-2xl sm:text-3xl">{title}</h2>
-      <div className="mt-3 space-y-3 text-[16px] leading-relaxed text-ink-2">{children}</div>
+      <KineticText as="h2" trigger="view" text={title} className="font-display text-2xl sm:text-3xl" />
+      <Reveal delay={0.1}>
+        <div className="mt-3 space-y-3 text-[16px] leading-relaxed text-ink-2">{children}</div>
+      </Reveal>
     </section>
   );
 }
