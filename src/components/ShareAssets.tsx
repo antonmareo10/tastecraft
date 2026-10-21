@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import type { Playbook } from "@/lib/types";
 import { IconDownload } from "./icons";
+import { toast } from "./Toaster";
 import { CopyButton, Section } from "./ui";
 
 type Language = "English" | "Español";
@@ -764,7 +765,7 @@ export function ShareAssets({ playbook, language = "English" }: ShareAssetsProps
             <div className="mt-4 border-t border-line pt-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Caption</p>
-                <CopyButton text={caption} label="Copy caption" />
+                <CopyButton text={caption} label="Copy caption" done="Caption copied" />
               </div>
               <p className="whitespace-pre-line rounded-lg border border-line bg-card p-3 text-sm leading-relaxed">
                 {caption}
@@ -816,6 +817,7 @@ function AssetCard({
           <a
             href={src}
             download={filename}
+            onClick={() => toast(`${title} downloaded`)}
             className="no-print inline-flex shrink-0 items-center gap-1.5 rounded-full border border-olive bg-olive px-3.5 py-1.5 text-xs font-medium text-paper transition hover:border-olive-2 hover:bg-olive-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-olive"
           >
             <IconDownload size={14} />

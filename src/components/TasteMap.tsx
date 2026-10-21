@@ -1,9 +1,11 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
+import type { LeafletEvent, Path } from "leaflet";
 import { useEffect } from "react";
 import { CircleMarker, MapContainer, Rectangle, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { HeatCell, Zone } from "@/lib/types";
+import { useInViewOnce } from "./fx";
 
 // Warm sequential ramp (paper -> saffron -> terracotta -> plum) for affinity 0..1.
 function heatColor(a: number): string {
@@ -64,8 +66,20 @@ export default function TasteMap({
 }) {
   const here: [number, number][] = restaurant?.lat != null && restaurant?.lon != null ? [[restaurant.lat, restaurant.lon]] : [];
   const bounds = focusBounds([...here, ...zones.map((z): [number, number] => [z.lat, z.lon])]);
+  // The first time the map scrolls into view, the heat cells bloom outwards from the restaurant
+  // (or the city centre), then the hotspots pop in (CSS in globals.css, off with reduced motion).
+  const [ref, inView] = useInViewOnce<HTMLDivElement>(0.3);
+  const [oLat, oLon] = here[0] ?? center;
+  const far = Math.max(1e-6, ...cells.map((c) => Math.hypot(c.lat - oLat, c.lon - oLon)));
+  const delayFrom = (lat: number, lon: number, span: number) => (e: LeafletEvent) =>
+    ((e.target as Path).getElement() as SVGElement | undefined)?.style.setProperty("--d", `${Math.round((Math.hypot(lat - oLat, lon - oLon) / far) * span)}ms`);
   return (
-    <div className="overflow-hidden rounded-xl border border-line">
+    <div
+      ref={ref}
+      data-in={inView ? "" : undefined}
+      data-bars=""
+      className="tm-wrap overflow-hidden rounded-xl border border-line"
+    >
       <MapContainer
         center={center}
         zoom={12}
@@ -91,7 +105,9 @@ export default function TasteMap({
               stroke: false,
               fillColor: heatColor(c.affinity),
               fillOpacity: 0.15 + c.affinity * 0.55,
+              className: "tm-cell",
             }}
+            eventHandlers={{ add: delayFrom(c.lat, c.lon, 650) }}
           >
             <Tooltip sticky>Taste affinity {Math.round(c.affinity * 100)}</Tooltip>
           </Rectangle>
@@ -101,7 +117,8 @@ export default function TasteMap({
             key={`${z.label}-${i}`}
             center={[z.lat, z.lon]}
             radius={7}
-            pathOptions={{ color: "#1d1b17", weight: 1.5, fillColor: "#fffdf8", fillOpacity: 1 }}
+            pathOptions={{ color: "#1d1b17", weight: 1.5, fillColor: "#fffdf8", fillOpacity: 1, className: "tm-zone" }}
+            eventHandlers={{ add: (e) => ((e.target as Path).getElement() as SVGElement | undefined)?.style.setProperty("--d", `${i * 90}ms`) }}
           >
             <Tooltip direction={i % 2 ? "bottom" : "top"} offset={[0, i % 2 ? 6 : -6]} permanent={i < 3}>
               <span className="text-[11px] font-medium">
@@ -110,6 +127,14 @@ export default function TasteMap({
             </Tooltip>
           </CircleMarker>
         ))}
+        {restaurant?.lat != null && restaurant?.lon != null && (
+          <CircleMarker
+            center={[restaurant.lat, restaurant.lon]}
+            radius={9}
+            interactive={false}
+            pathOptions={{ stroke: false, fillColor: "#2f4a35", fillOpacity: 0.35, className: "tm-pulse" }}
+          />
+        )}
         {restaurant?.lat != null && restaurant?.lon != null && (
           <CircleMarker
             center={[restaurant.lat, restaurant.lon]}
@@ -125,7 +150,7 @@ export default function TasteMap({
       <div className="flex items-center gap-3 border-t border-line bg-card px-3 py-2 text-[11px] text-muted">
         <span>Lower affinity</span>
         <span
-          className="h-2 flex-1 rounded-full"
+          className="bar-fill h-2 flex-1 rounded-full"
           style={{
             background:
               "linear-gradient(90deg, rgb(239,231,216), rgb(221,154,46), rgb(192,83,44), rgb(107,59,90))",
