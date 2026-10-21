@@ -7,7 +7,7 @@ import { SPRING } from "@/lib/motion";
 
 const noop = () => () => {};
 
-type Place = { top: number; left: number; width: number; originX: number; above: boolean };
+type Place = { top: number; left: number; width: number; originX: number; above: boolean; maxHeight: number };
 
 /**
  * A tap-or-click explanation (method notes, evidence checks, per-dish lift terms). It replaces
@@ -51,14 +51,17 @@ export function InfoPopover({
     const vw = document.documentElement.clientWidth;
     const w = Math.min(width, vw - 32);
     const left = Math.max(16, Math.min(vw - w - 16, r.left + r.width / 2 - w / 2));
-    // Open upwards when the trigger sits low on the screen and there is room above.
-    const above = r.bottom > window.innerHeight - 240 && r.top > 260;
+    // Open on the side with more room when the trigger sits low; long notes scroll inside.
+    const below = window.innerHeight - r.bottom - 20;
+    const aboveRoom = r.top - 20;
+    const above = below < 320 && aboveRoom > below;
     setPlace({
       top: (above ? r.top - 10 : r.bottom + 10) + window.scrollY,
       left: left + window.scrollX,
       width: w,
       originX: Math.max(12, Math.min(w - 12, r.left + r.width / 2 - left)),
       above,
+      maxHeight: Math.max(160, above ? aboveRoom : below),
     });
   };
 
@@ -128,8 +131,9 @@ export function InfoPopover({
                   initial={{ opacity: 0, scale: 0.94, y: place.above ? 6 : -6 }}
                   animate={{ opacity: 1, scale: 1, y: 0, transition: SPRING }}
                   exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.14 } }}
-                  style={{ transformOrigin: `${place.originX}px ${place.above ? "bottom" : "top"}` }}
-                  className="rounded-xl border border-line bg-card p-3.5 text-left text-[12.5px] leading-relaxed text-ink-2 shadow-[0_24px_48px_-22px_rgba(29,27,23,0.45)] outline-none"
+                  data-lenis-prevent
+                  style={{ transformOrigin: `${place.originX}px ${place.above ? "bottom" : "top"}`, maxHeight: place.maxHeight }}
+                  className="overflow-y-auto rounded-xl border border-line bg-card p-3.5 text-left text-[12.5px] leading-relaxed text-ink-2 shadow-[0_24px_48px_-22px_rgba(29,27,23,0.45)] outline-none"
                 >
                   {title && <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{title}</p>}
                   {children}

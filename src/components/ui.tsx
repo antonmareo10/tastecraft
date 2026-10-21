@@ -140,6 +140,7 @@ export function HowLink({
       label={label}
       title={title}
       trigger={label}
+      width={400}
       className={`relative inline-flex items-center underline decoration-dotted underline-offset-[3px] transition-colors before:absolute before:-inset-x-1 before:-inset-y-3.5 before:content-[''] ${
         tone === "dark" ? "text-paper/85 decoration-paper/50 hover:text-paper" : "text-muted decoration-ink-2/40 hover:text-ink"
       }`}

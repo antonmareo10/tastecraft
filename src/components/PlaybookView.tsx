@@ -772,7 +772,7 @@ function CrowdMenu({ data }: { data: NonNullable<LiveState["crowdMenu"]> }) {
                 <span className="min-w-0 text-sm leading-snug">{t.term}</span>
                 <span className="shrink-0 text-[11px] font-semibold tabular-nums text-olive">{liftLabel(t.lift)}</span>
               </div>
-              <div aria-hidden className="mt-1 grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-0.5 text-[10px] tabular-nums text-muted">
+              <div aria-hidden className="mt-1 grid grid-cols-[1fr_3rem] items-center gap-x-2 gap-y-0.5 text-right text-[10px] tabular-nums text-muted">
                 <span className="h-1.5 overflow-hidden rounded-full bg-paper-2">
                   <span
                     className="bar-fill block h-full rounded-full bg-olive"
