@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { KineticText, NumberReveal, Reveal } from "@/components/fx";
+import { gainPct, HELD_OUT } from "@/lib/benchmark";
 
 export const metadata: Metadata = {
   title: "About · Tastecraft",
@@ -46,7 +47,7 @@ export default function About() {
         />
         <Stat
           value={<NumberReveal value={2.3} decimals={1} prefix="−" suffix="%" delay={80} />}
-          label="independents lost in 2025 — about 9,500 closures — while chains grew 1.4%"
+          label="independents in 2025, a net loss of more than 9,500 locations, while chains grew 1.4%"
           href={SOURCES.nrn}
           index={1}
         />
@@ -77,6 +78,19 @@ export default function About() {
           Every playbook carries a <strong>crowd lift</strong>. Qloo gives two lists for the city: the ~150 restaurants this
           crowd loves most and the city’s ~150 most popular. Tastecraft measures how much more often the crowd’s favourite places
           serve the proposed dishes, and shows the same score for a quick answer from the same model without Qloo, side by side.
+          The ruler comes from Qloo too: crowd lift is computed from Qloo’s own menu tags, so it tests whether the dishes follow
+          this crowd’s Qloo signal, not whether guests will order them.
+        </p>
+        <p>
+          Does Qloo make the dishes better? On restaurants the model never saw (8 restaurants in 8 cities, same model and effort
+          in every arm), Qloo’s crowd-vs-city signal gave {gainPct(HELD_OUT.ratio)} over the same model alone (95% CI{" "}
+          {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in {HELD_OUT.better} of {HELD_OUT.restaurants}. A
+          playbook’s own score is higher because the agent sees the contrast it is scored on; that is why the number above is
+          the one to quote.{" "}
+          <a href={HELD_OUT.url} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
+            Method and limits
+          </a>
+          .
         </p>
       </Block>
 
@@ -118,31 +132,40 @@ export default function About() {
       <Block title="Why it’s a business">
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong>Who pays:</strong> independent restaurants and small groups (2–10 locations). A monthly subscription per
-            location, with a free first playbook.
+            <strong>Who pays:</strong> independent restaurants and small groups (2–10 locations), per location per month, with
+            the first playbook free. Price hypothesis, not yet tested: US$49 per location per month.
           </li>
           <li>
-            <strong>Why now:</strong> agents can finally do the analyst’s job end to end, and Qloo makes the taste data
-            available through an API.
+            <strong>What a playbook costs to make:</strong> about US$0.32–0.37 of Claude (two logged runs at Claude Opus 5.5 list
+            prices, mostly cached input) and roughly 17 to 34 Qloo API requests (counted from the code paths of the three
+            recorded runs; the concert ranking adds one lookup per artist). A weekly playbook is about US$1.50 of Claude per
+            location per month, before Qloo’s price, which is not public.
           </li>
           <li>
-            <strong>Distribution:</strong> restaurant software marketplaces (POS and reservations), food distributors who
-            benefit from the shopping list turning into orders, and Supplora — the founder’s AI purchasing tool, used by a
-            family-run restaurant in Spain.
+            <strong>How it reaches owners:</strong> the app marketplaces of POS systems (Toast, Square and Clover each run one),
+            reservation platforms’ partner programs, and food distributors, because the shopping list is already an order.
           </li>
           <li>
-            <strong>Expansion:</strong> connect sales data to close the loop (did the new dish sell?), multi-location
-            playbooks for small groups, and concert or game-day playbooks around live events.
+            <strong>How big:</strong> 412,498 independent restaurants in the US, and more than 7 in 10 US restaurants are
+            single-unit (sources above). At the hypothetical price, 1% of US independents would be about US$2.4M a year.
+          </li>
+          <li>
+            <strong>Why it is good for Qloo:</strong> every playbook is recurring Qloo API usage, so every restaurant that
+            subscribes is a Qloo API customer by proxy.
+          </li>
+          <li>
+            <strong>Next:</strong> connect sales data to close the loop (did the new dish sell?), multi-location playbooks for
+            small groups, and concert or game-day playbooks around live events.
           </li>
         </ul>
       </Block>
 
       <Block title="Who built it">
         <p>
-          Antonio González Fernández, Business Administration and Data Science student at CUNEF (Madrid). He built Supplora,
-          an AI tool that reads supplier delivery notes for a family-run restaurant and loads them into its management
-          system — 715 notes processed and €1,876 of supplier price increases flagged so far. Watching that restaurant
-          decide its specials on gut feel is where Tastecraft started.
+          Antonio González Fernández, Business Administration and Data Science student at CUNEF (Madrid). Before this he
+          built Supplora, an AI tool that reads supplier delivery notes for a family-run restaurant and loads them into its
+          management system: 715 notes processed and €1,876 of supplier price increases flagged by September 2026. Watching
+          that restaurant decide its specials on gut feel is where Tastecraft started.
         </p>
       </Block>
     </div>
