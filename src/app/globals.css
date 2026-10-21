@@ -104,6 +104,34 @@ body {
   animation-delay: var(--d, 0ms);
 }
 
+/*
+ * Scroll reveals (src/lib/reveal.ts, fx.tsx useScrollReveal). Everything is visible by default and
+ * plays its entrance once when it mounts (the server HTML's first paint included). [data-wait] hides
+ * a block below the fold once the person has started scrolling; removing it replays the entrance as
+ * the block comes into view. [data-still] cancels the entrance (automated browsers).
+ */
+[data-reveal] {
+  animation: reveal-in 0.55s var(--ease-out) backwards;
+  animation-delay: var(--rd, 0ms);
+}
+
+[data-reveal][data-wait] {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: none;
+}
+
+[data-reveal][data-still] {
+  animation: none;
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
 /* Kinetic type: each word slides up out of its own mask, 50 ms after the previous one. */
 .kinetic .kw {
   display: inline-block;
@@ -115,17 +143,22 @@ body {
 
 .kinetic .kw > span {
   display: inline-block;
-  transform: translateY(108%);
-}
-
-.kinetic[data-in] .kw > span {
-  animation: word-up 0.6s var(--ease-out) forwards;
+  animation: word-up 0.6s var(--ease-out) backwards;
   animation-delay: calc(var(--i, 0) * 50ms + var(--d0, 0ms));
 }
 
+.kinetic[data-wait] .kw > span {
+  transform: translateY(108%);
+  animation: none;
+}
+
+.kinetic[data-still] .kw > span {
+  animation: none;
+}
+
 @keyframes word-up {
-  to {
-    transform: none;
+  from {
+    transform: translateY(108%);
   }
 }
 
@@ -244,7 +277,7 @@ body {
   }
 }
 
-/* Bars that draw in once their group scrolls into view (data-bars + data-in set from JS). */
+/* Bars that draw in with their group: when it mounts, and again as it scrolls in (see scroll reveals above). */
 .bar-fill {
   transform-origin: left center;
 }
@@ -254,13 +287,23 @@ body {
 }
 
 [data-bars] .bar-fill {
-  transform: scaleX(0);
-  transition: transform 0.7s var(--ease-out);
-  transition-delay: calc(var(--i, 0) * 45ms + 120ms);
+  animation: bar-in 0.7s var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms + 120ms);
 }
 
-[data-bars][data-in] .bar-fill {
-  transform: none;
+[data-bars][data-wait] .bar-fill {
+  transform: scaleX(0);
+  animation: none;
+}
+
+[data-bars][data-still] .bar-fill {
+  animation: none;
+}
+
+@keyframes bar-in {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 /* Skeletons shaped like the playbook, with a soft sweep. */
@@ -306,13 +349,10 @@ body {
   }
 }
 
-/* Taste map: heat cells bloom outwards from the restaurant, then the hotspots pop in. */
-.tm-wrap:not([data-in]) .tm-cell,
-.tm-wrap:not([data-in]) .tm-zone,
-.tm-wrap:not([data-in]) .leaflet-tooltip-pane {
-  opacity: 0;
-}
-
+/*
+ * Taste map: heat cells bloom outwards from the restaurant, then the hotspots pop in and the labels
+ * fade in (on mount, and again as it scrolls in; see scroll reveals above). The pulse ends invisible.
+ */
 .tm-wrap .tm-cell,
 .tm-wrap .tm-zone,
 .tm-wrap .tm-pulse {
@@ -320,22 +360,43 @@ body {
   transform-origin: center;
 }
 
-.tm-wrap[data-in] .tm-cell {
-  animation: tm-cell 0.6s var(--ease-out) both;
+.tm-wrap .tm-cell {
+  animation: tm-cell 0.6s var(--ease-out) backwards;
   animation-delay: var(--d, 0ms);
 }
 
-.tm-wrap[data-in] .tm-zone {
-  animation: tm-pop 0.45s var(--ease-out) both;
+.tm-wrap .tm-zone {
+  animation: tm-pop 0.45s var(--ease-out) backwards;
   animation-delay: calc(650ms + var(--d, 0ms));
 }
 
 .tm-wrap .leaflet-tooltip-pane {
-  transition: opacity 0.5s var(--ease-out) 0.9s;
+  animation: tm-fade 0.5s var(--ease-out) 0.9s backwards;
 }
 
-.tm-wrap[data-in] .tm-pulse {
+.tm-wrap .tm-pulse {
   animation: tm-pulse 2.2s var(--ease-out) 0.9s 3 both;
+}
+
+.tm-wrap[data-wait] .tm-cell,
+.tm-wrap[data-wait] .tm-zone,
+.tm-wrap[data-wait] .leaflet-tooltip-pane,
+.tm-wrap[data-wait] .tm-pulse,
+.tm-wrap[data-still] .tm-pulse {
+  opacity: 0;
+  animation: none;
+}
+
+.tm-wrap[data-still] .tm-cell,
+.tm-wrap[data-still] .tm-zone,
+.tm-wrap[data-still] .leaflet-tooltip-pane {
+  animation: none;
+}
+
+@keyframes tm-fade {
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes tm-cell {
@@ -372,28 +433,32 @@ body {
   .shimmer::after,
   .marquee-track,
   .squiggle path,
+  [data-reveal],
   .kinetic .kw > span,
+  [data-bars] .bar-fill,
   .tm-wrap .tm-cell,
   .tm-wrap .tm-zone,
-  .tm-wrap .tm-pulse {
+  .tm-wrap .tm-pulse,
+  .tm-wrap .leaflet-tooltip-pane {
     animation: none !important;
   }
+  /* Nothing waits for a scroll (the reveal code never sets data-wait here; this is the CSS safety net). */
+  [data-reveal],
   .kinetic .kw > span,
   [data-bars] .bar-fill {
-    transform: none;
-    transition: none;
+    transform: none !important;
+  }
+  [data-reveal],
+  .tm-wrap .tm-cell,
+  .tm-wrap .tm-zone,
+  .tm-wrap .leaflet-tooltip-pane {
+    opacity: 1 !important;
   }
   .squiggle path {
     stroke-dashoffset: 0;
   }
-  .hero-light,
-  .tm-wrap .leaflet-tooltip-pane {
+  .hero-light {
     transition: none;
-  }
-  .tm-wrap:not([data-in]) .tm-cell,
-  .tm-wrap:not([data-in]) .tm-zone,
-  .tm-wrap:not([data-in]) .leaflet-tooltip-pane {
-    opacity: 1;
   }
   .tm-wrap .tm-pulse {
     opacity: 0;

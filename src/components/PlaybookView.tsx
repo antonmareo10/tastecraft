@@ -405,15 +405,7 @@ export default function PlaybookView({
                 const cl = p.crowd_lift;
                 const low = dishLowCount(mv.lift_terms);
                 return (
-                <m.article
-                  key={mv.dish}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.2 }}
-                  transition={{ duration: 0.55, ease: EASE_OUT, delay: n * 0.08 }}
-                  data-reveal
-                  className="flex flex-col"
-                >
+                <Reveal as="article" key={mv.dish} delay={n * 0.08} amount={0.2} margin="0px" className="flex flex-col">
                 <div className="lift flex flex-1 flex-col rounded-xl border border-line bg-paper/40 p-4">
                   <h4 className="font-display text-lg leading-tight">{mv.dish}</h4>
                   <div className="mt-1.5 flex items-center justify-between gap-3">
@@ -477,7 +469,7 @@ export default function PlaybookView({
                     </ul>
                   )}
                 </div>
-                </m.article>
+                </Reveal>
                 );
               })}
             </div>

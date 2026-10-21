@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { REVEAL } from "@/lib/motion";
+import { useScrollReveal } from "./fx";
 import { IconAlert, IconCheck, IconCopy } from "./icons";
 import { InfoPopover } from "./Popover";
 import { toast } from "./Toaster";
@@ -23,17 +23,10 @@ export function Section({
   aside?: ReactNode;
   id?: string;
 }) {
+  // Rises into place when it mounts, and below the fold as the person scrolls to it (fx.tsx).
+  const ref = useScrollReveal<HTMLElement>({ amount: 0.08 });
   return (
-    // Rises into place the first time it scrolls into view (once).
-    <m.section
-      id={id}
-      data-reveal
-      initial="hidden"
-      whileInView="shown"
-      viewport={{ once: true, amount: 0.08, margin: "0px 0px -6% 0px" }}
-      variants={REVEAL}
-      className="rounded-2xl border border-line bg-card p-5 sm:p-6"
-    >
+    <section ref={ref} id={id} data-reveal="" className="rounded-2xl border border-line bg-card p-5 sm:p-6">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           {icon && (
@@ -49,7 +42,7 @@ export function Section({
         {aside}
       </header>
       {children}
-    </m.section>
+    </section>
   );
 }
 

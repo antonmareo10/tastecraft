@@ -15,7 +15,8 @@ import {
   type RefObject,
 } from "react";
 import { m, useInView, useMotionValue, useReducedMotion, useSpring, type HTMLMotionProps } from "motion/react";
-import { REVEAL, SPRING_SOFT } from "@/lib/motion";
+import { SPRING_SOFT } from "@/lib/motion";
+import { createReveals, isScrollKey, type RevealEnv, type RevealOptions } from "@/lib/reveal";
 
 function subscribeMedia(query: string) {
   return (onChange: () => void) => {
@@ -37,39 +38,98 @@ export function useFinePointer(): boolean {
   );
 }
 
-/** Once an element has scrolled into view it stays "in" (reveals run once). */
-export function useInViewOnce<T extends Element>(amount = 0.25): [RefObject<T | null>, boolean] {
-  const ref = useRef<T | null>(null);
-  const inView = useInView(ref, { once: true, amount, margin: "0px 0px -8% 0px" });
-  return [ref, inView];
+const isTextField = (t: EventTarget | null) =>
+  t instanceof HTMLElement && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT");
+
+// Scroll reveals (src/lib/reveal.ts): content is visible by default; blocks below the fold rise into
+// place only once the person scrolls, so screenshots, print and automated browsers see everything.
+const browserReveals: RevealEnv = {
+  viewport: () => window.innerHeight,
+  motion: () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches && !navigator.webdriver,
+  whenInView(el, { amount, margin }, onEnter) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        onEnter();
+      },
+      { threshold: amount, rootMargin: margin },
+    );
+    io.observe(el as Element);
+    return () => io.disconnect();
+  },
+  onScrollIntent(onIntent) {
+    const opts = { capture: true, passive: true } as const;
+    const onKey = (e: KeyboardEvent) => {
+      if (isScrollKey(e.key, isTextField(e.target))) onIntent();
+    };
+    window.addEventListener("wheel", onIntent, opts);
+    window.addEventListener("touchmove", onIntent, opts);
+    window.addEventListener("keydown", onKey, opts);
+    return () => {
+      window.removeEventListener("wheel", onIntent, opts);
+      window.removeEventListener("touchmove", onIntent, opts);
+      window.removeEventListener("keydown", onKey, opts);
+    };
+  },
+};
+let reveals: ReturnType<typeof createReveals> | null = null;
+const revealController = () => (reveals ??= createReveals(browserReveals));
+
+/** Call when the person asks to scroll somewhere (the act tabs): blocks still below the fold rise as they arrive. */
+export function armReveals() {
+  revealController().arm();
 }
 
-/** A block that rises into place the first time it scrolls into view. */
+/**
+ * Hooks an element marked for a reveal ([data-reveal], .kinetic, [data-bars], .tm-wrap) into the
+ * scroll reveals. Runs before paint, so a block that has to wait is hidden before it is ever drawn.
+ */
+export function useScrollReveal<T extends HTMLElement>({ amount = 0.15, margin = "0px 0px -6% 0px" }: Partial<RevealOptions> = {}) {
+  const ref = useRef<T | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return revealController().watch(el, { amount, margin });
+  }, [amount, margin]);
+  return ref;
+}
+
+/** A block that rises into place: when it mounts, and below the fold as the person scrolls to it. */
 export function Reveal({
   children,
   delay = 0,
+  amount = 0.15,
+  margin = "0px 0px -6% 0px",
+  as,
   className,
-  ...rest
-}: { children: ReactNode; delay?: number; className?: string } & Omit<HTMLMotionProps<"div">, "children">) {
+}: {
+  children: ReactNode;
+  /** Seconds. */
+  delay?: number;
+  amount?: number;
+  margin?: string;
+  as?: "div" | "article" | "section";
+  className?: string;
+}) {
+  const Tag = as ?? "div";
+  const ref = useScrollReveal<HTMLElement>({ amount, margin });
   return (
-    <m.div
-      data-reveal
+    <Tag
+      ref={ref as RefObject<never>}
+      data-reveal=""
       className={className}
-      initial="hidden"
-      whileInView="shown"
-      viewport={{ once: true, amount: 0.15, margin: "0px 0px -6% 0px" }}
-      variants={{ hidden: REVEAL.hidden, shown: { ...REVEAL.shown, transition: { ...REVEAL.shown.transition, delay } } }}
-      {...rest}
+      style={delay ? ({ "--rd": `${Math.round(delay * 1000)}ms` } as React.CSSProperties) : undefined}
     >
       {children}
-    </m.div>
+    </Tag>
   );
 }
 
 /**
  * Words that slide up out of a mask, one after the other. The animation itself is CSS (.kinetic in
  * globals.css), so a server-rendered headline animates on first paint without waiting for JS;
- * `trigger="view"` waits until the heading scrolls into view instead.
+ * `trigger="view"` also replays it as the person scrolls down to the heading (useScrollReveal).
  */
 export function KineticText<T extends ElementType = "h2">({
   as,
@@ -89,15 +149,12 @@ export function KineticText<T extends ElementType = "h2">({
   className?: string;
 } & Omit<ComponentPropsWithoutRef<T>, "children" | "className">) {
   const Tag = (as ?? "h2") as ElementType;
-  const ref = useRef<HTMLElement | null>(null);
-  const inView = useInView(ref, { once: true, amount: 0.6 });
-  const on = trigger === "load" || inView;
+  const ref = useScrollReveal<HTMLElement>({ amount: 0.6, margin: "0px" });
   const words = text.split(" ");
   return (
     <Tag
-      ref={ref}
+      ref={trigger === "view" ? ref : undefined}
       className={`kinetic ${className ?? ""}`}
-      data-in={on ? "" : undefined}
       style={{ "--d0": `${delayMs}ms` } as React.CSSProperties}
       {...rest}
     >
@@ -233,8 +290,8 @@ export function MagneticButton({
 }
 
 /**
- * Marks a group whose bars (.bar-fill) draw in together the first time it scrolls into view
- * (CSS in globals.css). Children set --i for a short stagger.
+ * Marks a group whose bars (.bar-fill) draw in together when it mounts, and below the fold as the
+ * person scrolls to it (CSS in globals.css, useScrollReveal). Children set --i for a short stagger.
  */
 export function InViewGroup({
   children,
@@ -242,9 +299,9 @@ export function InViewGroup({
   amount = 0.3,
   ...rest
 }: { children: ReactNode; className?: string; amount?: number } & Omit<ComponentPropsWithoutRef<"div">, "children" | "className">) {
-  const [ref, inView] = useInViewOnce<HTMLDivElement>(amount);
+  const ref = useScrollReveal<HTMLDivElement>({ amount, margin: "0px 0px -8% 0px" });
   return (
-    <div ref={ref} className={className} data-bars="" data-in={inView ? "" : undefined} {...rest}>
+    <div ref={ref} className={className} data-bars="" {...rest}>
       {children}
     </div>
   );

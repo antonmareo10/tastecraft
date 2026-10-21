@@ -5,7 +5,7 @@ import type { LeafletEvent, Path } from "leaflet";
 import { useEffect } from "react";
 import { CircleMarker, MapContainer, Rectangle, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { HeatCell, Zone } from "@/lib/types";
-import { useInViewOnce } from "./fx";
+import { useScrollReveal } from "./fx";
 
 // Warm sequential ramp (paper -> saffron -> terracotta -> plum) for affinity 0..1.
 function heatColor(a: number): string {
@@ -66,9 +66,10 @@ export default function TasteMap({
 }) {
   const here: [number, number][] = restaurant?.lat != null && restaurant?.lon != null ? [[restaurant.lat, restaurant.lon]] : [];
   const bounds = focusBounds([...here, ...zones.map((z): [number, number] => [z.lat, z.lon])]);
-  // The first time the map scrolls into view, the heat cells bloom outwards from the restaurant
-  // (or the city centre), then the hotspots pop in (CSS in globals.css, off with reduced motion).
-  const [ref, inView] = useInViewOnce<HTMLDivElement>(0.3);
+  // When the map appears, and below the fold as the person scrolls to it, the heat cells bloom
+  // outwards from the restaurant (or the city centre), then the hotspots pop in (CSS in globals.css,
+  // off with reduced motion; the cells are visible by default).
+  const ref = useScrollReveal<HTMLDivElement>({ amount: 0.3, margin: "0px 0px -8% 0px" });
   const [oLat, oLon] = here[0] ?? center;
   const far = Math.max(1e-6, ...cells.map((c) => Math.hypot(c.lat - oLat, c.lon - oLon)));
   const delayFrom = (lat: number, lon: number, span: number) => (e: LeafletEvent) =>
@@ -76,7 +77,6 @@ export default function TasteMap({
   return (
     <div
       ref={ref}
-      data-in={inView ? "" : undefined}
       data-bars=""
       className="tm-wrap overflow-hidden rounded-xl border border-line"
     >

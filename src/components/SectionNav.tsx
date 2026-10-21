@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { m, useSpring } from "motion/react";
 import { scrollToElement } from "@/lib/scroll";
+import { armReveals } from "./fx";
 
 const PILL_SPRING = { stiffness: 420, damping: 38, mass: 0.8 };
 
@@ -130,6 +131,7 @@ export default function SectionNav({ items }: { items: readonly (readonly [id: s
               if (!target) return;
               e.preventDefault();
               setActive(id);
+              armReveals(); // a scroll the person asked for: blocks below rise as the page glides past them
               scrollToElement(target); // the act header's scroll-margin keeps it clear of this bar
               history.replaceState(null, "", `#${id}`);
             }}
