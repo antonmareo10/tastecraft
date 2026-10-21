@@ -44,11 +44,14 @@ export function liftLabel(v: number): string {
 }
 
 function termLine(t: TermLift, cl: Pick<CrowdLift, "crowd_n" | "city_n">): string {
-  return `${t.term}: on ${t.crowd} of the ${cl.crowd_n} restaurants your guests love most vs ${t.city} of the city's ${cl.city_n} most popular (${liftLabel(t.lift)})`;
+  return `${t.term}: on the menus of ${t.crowd} of ${cl.crowd_n} restaurants your guests love most vs ${t.city} of ${cl.city_n} of the city's most popular (${liftLabel(t.lift)})`;
 }
 
 const LIFT_HELP =
-  "Crowd lift compares the restaurants this crowd loves most (Qloo affinity) with the city's most popular restaurants. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. Computed by Tastecraft from Qloo data, never written by the model. It says nothing about how many covers a dish will sell.";
+  "Crowd lift compares two Qloo lists for the city: the ~150 restaurants this crowd loves most (Qloo affinity) and the city's ~150 most popular restaurants, counting only the ones with menu tags in Qloo. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. Computed by Tastecraft from Qloo data, never written by the model. The agent sees this crowd-vs-city contrast while planning, so a high score shows the plan follows it; the benchmark's held-out check measures how much carries over to restaurants the model did not see. It says nothing about how many covers a dish will sell.";
+
+const VERIFY_HELP =
+  "Each evidence line cites the Qloo names (places, artists, tags) and 0-100 scores it relies on. The server checks that every cited name was returned by Qloo in this run and that every cited score is within 1 of a number Qloo returned for that name. Other numbers in the sentence, such as menu shares, are not checked.";
 
 function money(v: number, currency: string): string {
   try {
@@ -133,19 +136,25 @@ export default function PlaybookView({
                 <span className="font-display text-4xl leading-none text-paper">{liftLabel(p.crowd_lift.score)}</span>
                 <div className="leading-tight">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-paper/90">Crowd lift</p>
-                  <p className="text-[11px] text-paper/75">
-                    Your guests’ {p.crowd_lift.crowd_n} favourite restaurants serve dishes like these {liftLabel(p.crowd_lift.score).slice(1)}× as
-                    often as {p.crowd_lift.city}’s {p.crowd_lift.city_n} most popular ({p.crowd_lift.matched} of {p.crowd_lift.total} dishes
-                    matched)
-                    {p.crowd_lift.baseline?.score != null ? ` · same model without Qloo: ${liftLabel(p.crowd_lift.baseline.score)}` : ""}
+                  <p className="text-[11px] text-paper/80">
+                    Your guests’ favourite restaurants serve dishes like these {liftLabel(p.crowd_lift.score).slice(1)}× as often as{" "}
+                    {p.crowd_lift.city}’s most popular ones ({p.crowd_lift.matched} of {p.crowd_lift.total} dishes matched). Counted on the{" "}
+                    {p.crowd_lift.crowd_n} and {p.crowd_lift.city_n} restaurants with menu data in Qloo’s top ~150 of each.
+                    {p.crowd_lift.baseline?.score != null ? ` Quick answer from the same model without Qloo: ${liftLabel(p.crowd_lift.baseline.score)}.` : ""}
                   </p>
                 </div>
               </div>
             ) : null}
             {p?.verification && p.verification.checked > 0 ? (
-              <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-paper/25 px-3 py-1 text-xs text-paper/85">
-                <IconCheck size={13} />
-                {p.verification.verified} of {p.verification.checked} cited facts verified against this run’s live Qloo responses
+              <p
+                className="mt-4 flex w-fit max-w-full items-start gap-2 rounded-2xl border border-paper/25 px-3 py-1.5 text-xs leading-snug text-paper/85"
+                title={VERIFY_HELP}
+              >
+                <IconCheck size={13} className="mt-px shrink-0" />
+                <span>
+                  {p.verification.verified} of {p.verification.checked} evidence lines check out: every Qloo name and score they cite was
+                  returned in this run
+                </span>
               </p>
             ) : running ? (
               <p className="mt-5 text-sm text-paper/70">Building the playbook from live taste data…</p>
@@ -229,7 +238,8 @@ export default function PlaybookView({
                 <div className="rounded-xl border border-olive/25 bg-olive/5 p-4" title={LIFT_HELP}>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-olive">On your crowd’s menus</p>
                   <p className="mb-2 text-[11px] leading-snug text-muted">
-                    vs {live.crowdMenu.city}’s {live.crowdMenu.city_n} most popular restaurants
+                    Menus at the {live.crowdMenu.crowd_n} restaurants your guests love most vs {live.crowdMenu.city}’s {live.crowdMenu.city_n} most
+                    popular (Qloo)
                   </p>
                   <ul className="space-y-1.5">
                     {live.crowdMenu.favours.slice(0, 6).map((t) => (
@@ -349,7 +359,7 @@ export default function PlaybookView({
             id="act-moves"
             n={2}
             title="The moves"
-            subtitle="What to cook, what to host and who to tell. Facts marked ✓ come from Qloo in this run; the moves themselves are our read of them: bets to test, not predictions."
+            subtitle="What to cook, what to host and who to tell. ✓ marks evidence whose cited Qloo names and scores were returned in this run; the moves themselves are our read of them: bets to test, not predictions."
           />
           {p.taste_gaps.length > 0 && (
             <Section icon={<IconGap size={16} />} kicker="Taste gaps" title="What locals love that you don’t serve yet">
@@ -389,12 +399,12 @@ export default function PlaybookView({
                   </div>
                   <p className="mt-1.5 text-sm leading-snug text-ink-2">{m.description}</p>
                   {cl && m.lift_terms && m.lift_terms.length > 0 && (
-                    <p className="mt-1.5 text-[11px] leading-snug text-muted" title={LIFT_HELP}>
-                      On local menus:{" "}
+                    <p className="mt-1.5 text-[12px] leading-snug text-muted" title={LIFT_HELP}>
+                      On local menus, your crowd’s vs the city’s:{" "}
                       {m.lift_terms.map((t, i) => (
                         <span key={t.term}>
                           {i > 0 && " · "}
-                          <span className="text-ink-2">{t.term}</span> {t.crowd} of {cl.crowd_n} vs {t.city} of {cl.city_n}
+                          <span className="font-medium text-ink-2">{t.term}</span> {t.crowd} of {cl.crowd_n} vs {t.city} of {cl.city_n}
                         </span>
                       ))}
                     </p>
@@ -415,6 +425,11 @@ export default function PlaybookView({
                 );
               })}
             </div>
+            <p className="mt-3 text-[12px] leading-snug text-muted">
+              Shares quoted in the agent’s text compare your guests’ ~150 favourite restaurants with the city’s ~150 most popular ones in
+              Qloo (“citywide” means the latter, not every restaurant in the city). The agent quotes them; only the cited Qloo names and
+              scores are checked.
+            </p>
           </Section>
 
           <div className="grid gap-5 lg:grid-cols-2">
@@ -966,9 +981,23 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
           most popular restaurants).
         </p>
       )}
+      <p className="mb-3 text-[12px] leading-snug text-muted">
+        The left column is a quick answer from the same model: one call with no tools and no Qloo data, at low effort and capped at 90
+        words, while the agent works with Qloo at medium effort and sees the crowd-vs-city contrast this score is built on. For a
+        comparison at equal effort, scored on restaurants the model never saw, see the{" "}
+        <a
+          href="https://github.com/antonmareo10/tastecraft/blob/main/eval/SUMMARY.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-line underline-offset-2 hover:text-ink"
+        >
+          benchmark
+        </a>
+        .
+      </p>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-line bg-paper/40 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model, no Qloo</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Same model, quick answer without Qloo</p>
           {generic?.score != null && (
             <p className="mt-1 text-[11px] font-semibold text-muted">
               Crowd lift {liftLabel(generic.score)} · {generic.matched} of {generic.total} dishes matched on local menus

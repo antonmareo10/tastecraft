@@ -95,14 +95,14 @@ export function EvidenceLine({ evidence }: { evidence: Evidence }) {
         className={`mt-0.5 shrink-0 ${ok ? "text-olive" : unknown ? "text-saffron" : "text-terracotta"}`}
         title={
           ok
-            ? `Verified: ${evidence.cites.map((c) => (c.score != null ? `${c.name} (${c.score})` : c.name)).join(", ")} returned by Qloo in this run`
+            ? `Checked: ${evidence.cites.map((c) => (c.score != null ? `${c.name} (${c.score})` : c.name)).join(", ")} returned by Qloo in this run. Other numbers in the sentence are not checked.`
             : unknown
               ? "Not checked"
-              : "Could not be matched to this run's Qloo responses"
+              : "A cited name or score could not be matched to this run's Qloo responses"
         }
       >
         {ok ? <IconCheck size={13} /> : <IconAlert size={13} />}
-        <span className="sr-only">{ok ? "Verified against Qloo" : "Not verified"}</span>
+        <span className="sr-only">{ok ? "Cited Qloo names and scores checked:" : "Not verified:"}</span>
       </span>
       <span>{evidence.text}</span>
     </li>

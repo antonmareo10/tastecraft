@@ -49,9 +49,9 @@ export default function About() {
           neighborhoods, a supplier shopping list and a 7-day launch plan.
         </p>
         <p>
-          Every playbook carries a <strong>crowd lift</strong>: Qloo compares the restaurants this crowd loves most with the
-          city’s most popular ones, and Tastecraft measures how much more often the crowd’s favourite places serve the
-          proposed dishes. The same score is shown for the same model’s answer without Qloo, side by side.
+          Every playbook carries a <strong>crowd lift</strong>. Qloo gives two lists for the city: the ~150 restaurants this
+          crowd loves most and the city’s ~150 most popular. Tastecraft measures how much more often the crowd’s favourite places
+          serve the proposed dishes, and shows the same score for a quick answer from the same model without Qloo, side by side.
         </p>
       </Block>
 
@@ -71,8 +71,10 @@ export default function About() {
             can switch to another candidate before relying on the results.
           </li>
           <li>
-            <strong>Every fact is checked.</strong> The server records every value Qloo returns in a run and verifies each
-            cited fact in the playbook against it. Unverifiable claims are flagged, not hidden.
+            <strong>Cited names and scores are checked.</strong> The server records every name and number Qloo returns in a
+            run. Each piece of evidence in the playbook cites the Qloo names and scores it relies on, and the server checks every
+            cited name against that record and every cited score to within 1 point. What fails is flagged, not hidden. Other
+            numbers in the text, such as menu shares, are quoted by the agent and not checked.
           </li>
           <li>
             <strong>The owner decides.</strong> Tastecraft proposes; nothing is ordered, posted or booked without the owner.

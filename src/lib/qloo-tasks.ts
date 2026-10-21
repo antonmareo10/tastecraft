@@ -494,7 +494,7 @@ export async function nameZones(cells: HeatCell[]): Promise<Zone[]> {
       }
       placeNameCache.set(key, label);
     }
-    // Several hot cells often fall in the same neighbourhood: keep the strongest one per name.
+    // Several hot cells often fall in the same neighborhood: keep the strongest one per name.
     if (!zones.some((z) => z.label === label)) zones.push({ label, lat: c.lat, lon: c.lon, affinity: c.affinity });
   }
   return zones;
