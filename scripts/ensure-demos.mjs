@@ -8,10 +8,17 @@
 //
 //   node scripts/ensure-demos.mjs            keep an existing local file, otherwise download or create []
 //   node scripts/ensure-demos.mjs --refresh  download again even if a local file exists
+//
+// On a Vercel production build a failed download stops the build instead: Vercel then keeps the
+// current deployment (with its replays) live, rather than replacing it with one that has none.
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { decryptDemos } from "./demos-crypto.mjs";
 
-const file = new URL("../src/data/demos.json", import.meta.url);
+const file = process.env.TASTECRAFT_DEMOS_FILE
+  ? pathToFileURL(process.env.TASTECRAFT_DEMOS_FILE)
+  : new URL("../src/data/demos.json", import.meta.url);
+const productionBuild = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
 const url = process.env.TASTECRAFT_DEMOS_URL?.trim();
 const key = process.env.TASTECRAFT_DEMOS_KEY?.trim();
 const refresh = process.argv.includes("--refresh");
@@ -34,11 +41,17 @@ if (fs.existsSync(file) && !refresh) {
 } else if (url && key) {
   try {
     const demos = decryptDemos(await download(), key);
+    if (!Array.isArray(demos) || demos.length === 0) throw new Error("the download held no recorded runs");
     fs.writeFileSync(file, JSON.stringify(demos) + "\n");
     console.log(`[demos] ${demos.length} recorded runs loaded for instant replay.`);
   } catch (err) {
     // Never print the URL or the key.
-    console.warn(`[demos] Could not load the encrypted recorded runs (${err instanceof Error ? err.message : err}); continuing without replays.`);
+    const why = err instanceof Error ? err.message : String(err);
+    if (productionBuild) {
+      console.error(`[demos] Could not load the encrypted recorded runs (${why}). Stopping this production build so the live deployment keeps its replays.`);
+      process.exit(1);
+    }
+    console.warn(`[demos] Could not load the encrypted recorded runs (${why}); continuing without replays.`);
     if (!fs.existsSync(file)) fs.writeFileSync(file, "[]\n");
   }
 } else if (!fs.existsSync(file)) {

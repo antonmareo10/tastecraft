@@ -60,4 +60,23 @@ describe("live-run gate", () => {
     expect(describeLiveFailure(denied)).toMatch(/key/);
     expect(liveRunsDisabled()).toMatch(/paused/);
   });
+
+  it("pauses live runs when Qloo rejects the key (e.g. the hackathon key expired), with a plain message", async () => {
+    const { describeLiveFailure, liveRunsDisabled, acquireLiveRun } = await load();
+    const { QlooError } = await import("@/lib/qloo");
+    const expired = new QlooError(401, "Qloo rejected the API key (401). Check QLOO_API_KEY; retrying will not help.", "QLOO_AUTH");
+    const msg = describeLiveFailure(expired);
+    expect(msg).toMatch(/^Live runs are paused/); // the UI turns "paused" into the "watch a recorded run" state
+    expect(msg).not.toMatch(/QLOO_API_KEY/); // no server internals in front of a judge
+    expect(liveRunsDisabled()).toMatch(/paused/);
+    expect(acquireLiveRun("8.8.8.8").ok).toBe(false); // the next visitor goes straight to the replays
+  });
+
+  it("does not pause on a Qloo rate limit, which is temporary", async () => {
+    const { describeLiveFailure, liveRunsDisabled } = await load();
+    const { QlooError } = await import("@/lib/qloo");
+    const busy = new QlooError(429, "Qloo rate limit reached (429). Wait a minute before trying again.", "QLOO_RATE_LIMIT", true);
+    expect(describeLiveFailure(busy)).toMatch(/rate limit/);
+    expect(liveRunsDisabled()).toBeNull();
+  });
 });

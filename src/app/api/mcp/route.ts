@@ -34,39 +34,44 @@ const handler = createMcpHandler(
         }),
       },
       async ({ restaurant, city, entity_id }) => {
-        if (!qlooConfigured()) return fail("Qloo is not configured on this server.");
-        const ip = caller.getStore() ?? "unknown";
-        if (!allowCall(`profile:${ip}`, PROFILE_PER_IP_PER_HOUR, 3_600_000)) return fail("You've reached this demo's hourly limit of taste profiles. Try again later.");
-        if (!allowCall("profile:all", PROFILE_DAILY_CAP, 86_400_000)) return fail("This demo's daily budget of taste profiles is used up. Try again tomorrow.");
-        const { selected: match, resolution } = resolveRestaurant(restaurant, city, await findRestaurant(restaurant, city), entity_id);
-        if (!match) return fail(`No Qloo match for ${restaurant} in ${city}.`);
-        const ids = [match.entity_id];
-        const [places, artists, brands, dishes, cuisines, vibe, demographics] = await Promise.all([
-          audienceAffinity({ entityIds: ids, domain: "place", city, take: 10 }),
-          audienceAffinity({ entityIds: ids, domain: "artist", city, take: 10 }),
-          audienceAffinity({ entityIds: ids, domain: "brand", city, take: 10 }),
-          tasteTags({ entityId: match.entity_id, city, family: "dishes", take: 10 }).catch(() => []),
-          tasteTags({ entityId: match.entity_id, city, family: "cuisines", take: 10 }).catch(() => []),
-          tasteTags({ entityId: match.entity_id, city, family: "ambience", take: 10 }).catch(() => []),
-          audienceDemographics(match.entity_id).catch(() => null),
-        ]);
-        const pct = (a?: number) => (a == null ? null : Math.round(a * 100));
-        return text({
-          restaurant: { entity_id: match.entity_id, name: match.name, address: match.subtitle, tags: match.all_tags.slice(0, 12) },
-          match: { status: resolution.status, how: resolution.match, alternatives: resolution.alternatives },
-          guests_also_love: {
-            places: places.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
-            artists: artists.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
-            brands: brands.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
-          },
-          cravings: {
-            dishes: dishes.map((t) => ({ name: t.name, affinity: pct(t.affinity) })),
-            cuisines: cuisines.map((t) => ({ name: t.name, affinity: pct(t.affinity) })),
-            vibe: vibe.map((t) => ({ name: t.name, affinity: pct(t.affinity) })),
-          },
-          demographics,
-          source: "Qloo Insights API (aggregated, privacy-first taste signals)",
-        });
+        try {
+          if (!qlooConfigured()) return fail("Qloo is not configured on this server.");
+          const ip = caller.getStore() ?? "unknown";
+          if (!allowCall(`profile:${ip}`, PROFILE_PER_IP_PER_HOUR, 3_600_000)) return fail("You've reached this demo's hourly limit of taste profiles. Try again later.");
+          if (!allowCall("profile:all", PROFILE_DAILY_CAP, 86_400_000)) return fail("This demo's daily budget of taste profiles is used up. Try again tomorrow.");
+          const { selected: match, resolution } = resolveRestaurant(restaurant, city, await findRestaurant(restaurant, city), entity_id);
+          if (!match) return fail(`No Qloo match for ${restaurant} in ${city}.`);
+          const ids = [match.entity_id];
+          const [places, artists, brands, dishes, cuisines, vibe, demographics] = await Promise.all([
+            audienceAffinity({ entityIds: ids, domain: "place", city, take: 10 }),
+            audienceAffinity({ entityIds: ids, domain: "artist", city, take: 10 }),
+            audienceAffinity({ entityIds: ids, domain: "brand", city, take: 10 }),
+            tasteTags({ entityId: match.entity_id, city, family: "dishes", take: 10 }).catch(() => []),
+            tasteTags({ entityId: match.entity_id, city, family: "cuisines", take: 10 }).catch(() => []),
+            tasteTags({ entityId: match.entity_id, city, family: "ambience", take: 10 }).catch(() => []),
+            audienceDemographics(match.entity_id).catch(() => null),
+          ]);
+          const pct = (a?: number) => (a == null ? null : Math.round(a * 100));
+          return text({
+            restaurant: { entity_id: match.entity_id, name: match.name, address: match.subtitle, tags: match.all_tags.slice(0, 12) },
+            match: { status: resolution.status, how: resolution.match, alternatives: resolution.alternatives },
+            guests_also_love: {
+              places: places.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
+              artists: artists.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
+              brands: brands.map((e) => ({ name: e.name, affinity: pct(e.affinity) })),
+            },
+            cravings: {
+              dishes: dishes.map((t) => ({ name: t.name, affinity: pct(t.affinity) })),
+              cuisines: cuisines.map((t) => ({ name: t.name, affinity: pct(t.affinity) })),
+              vibe: vibe.map((t) => ({ name: t.name, affinity: pct(t.affinity) })),
+            },
+            demographics,
+            source: "Qloo Insights API (aggregated, privacy-first taste signals)",
+          });
+        } catch (err) {
+          // e.g. the hackathon key expired: a clear tool error instead of an exception.
+          return fail(describeLiveFailure(err));
+        }
       },
     );
 

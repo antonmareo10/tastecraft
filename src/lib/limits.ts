@@ -4,6 +4,7 @@
 // straight to the recorded runs (offered by the UI next to every error) instead of waiting for a failure.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { QlooError } from "./qloo";
 
 // A full playbook run costs about US$0.3-0.4 of Claude usage (measured from token counts, see README), so the default
 // daily cap is deliberately small; raise LIVE_RUNS_DAILY_CAP when the API balance allows.
@@ -73,6 +74,13 @@ export function acquireLiveRun(ip: string): Gate {
  * pause live runs on this instance, because every following run would fail the same way.
  */
 export function describeLiveFailure(err: unknown): string {
+  // A rejected or missing Qloo key (e.g. the hackathon key expired) won't fix itself either.
+  if (err instanceof QlooError && (err.code === "QLOO_AUTH" || err.code === "QLOO_CONFIG")) {
+    console.warn(`[tastecraft] live runs paused: ${err.message}`);
+    const msg = `Live runs are paused: Qloo rejected this demo's API key, so a live run can't read the taste graph.`;
+    pauseLiveRuns(msg);
+    return msg;
+  }
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
     const msg = `Live runs are paused: the AI key for this demo was rejected.`;
     pauseLiveRuns(msg);

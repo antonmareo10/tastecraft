@@ -7,6 +7,7 @@ import { z } from "zod";
 import { matchConcerts } from "./concerts";
 import { EvidenceLedger } from "./ledger";
 import { withLens } from "./lens";
+import { describeLiveFailure } from "./limits";
 import { crowdLiftOf, parseBaselineDishes } from "./lift";
 import { displayMenuTerms, supportedFirst } from "./menu-terms";
 import { QlooError } from "./qloo";
@@ -197,7 +198,8 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
   let fatal: string | null = null;
   const short = (err: unknown): string => {
     if (err instanceof QlooError && (err.code === "QLOO_AUTH" || err.code === "QLOO_CONFIG") && !fatal) {
-      fatal = err.message;
+      // Visitors get a plain "paused" message (the UI then offers the recorded runs) and live runs stop on this instance.
+      fatal = describeLiveFailure(err);
       setTimeout(() => stopper.abort(), 0);
     }
     return shortMessage(err);
