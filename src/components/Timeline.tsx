@@ -99,17 +99,23 @@ export default function Timeline({
       <ol
         ref={listRef}
         data-lenis-prevent
+        // Scrollable on its own, so it has to be reachable and scrollable from the keyboard too.
+        tabIndex={0}
+        aria-label="Agent log, step by step"
         onWheel={(e) => {
           if (e.deltaY < 0) follow.current = false;
         }}
         onTouchMove={() => {
           follow.current = false;
         }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home") follow.current = false;
+        }}
         onScroll={(e) => {
           const el = e.currentTarget;
           if (el.scrollHeight - el.scrollTop - el.clientHeight < 24) follow.current = true;
         }}
-        className="max-h-[62vh] space-y-1 overflow-y-auto px-3 py-3 lg:max-h-[calc(100vh-15rem)]"
+        className="max-h-[62vh] space-y-1 overflow-y-auto rounded-lg px-3 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-olive lg:max-h-[calc(100vh-15rem)]"
       >
         {items.length === 0 && running && (
           <li className="flex items-center gap-3 px-2 py-3 text-sm text-muted">

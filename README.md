@@ -195,6 +195,12 @@ npm run pack-demos        # encrypt them to .demos/demos.enc.txt with the key in
 
 To serve them from a deployment, upload `.demos/demos.enc.txt` to a private-by-URL location (for example `gh gist create .demos/demos.enc.txt`, which makes a secret gist) and set `TASTECRAFT_DEMOS_URL` to its raw link and `TASTECRAFT_DEMOS_KEY` to the content of `.demos/KEY`.
 
+## Accessibility
+
+Everything works from the keyboard. The Qloo switch is a real switch (Space or Enter flips it, and the new crowd lift is announced), the restaurant and language pickers move with the arrow keys, the agent log can be focused and scrolled with the keyboard, and every badge's spoken name starts with the words you see on it. With reduced motion turned on, nothing slides or drifts and every interaction still works.
+
+How I checked it: axe-core 4.10 (WCAG 2.0, 2.1 and 2.2 AA plus best practices) on the home page with the switch on and off, a full replay and /about, at 1440 px and 390 px, run with Playwright on a production build. Result: 0 violations at any level on all 8 pages. The same script also tabs to the switch, flips it, moves both pickers with the arrows and scrolls the agent log, with and without reduced motion. Lighthouse on a phone profile: Accessibility 100, Best Practices 100, SEO 100, Performance 93.
+
 ## Stack
 
 Next.js 16 (App Router) · React 19 · Tailwind CSS 4 · Anthropic TypeScript SDK (tool runner, adaptive thinking) · Zod · Leaflet + OpenStreetMap · ngeohash · Qloo official harness.

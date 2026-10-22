@@ -285,13 +285,27 @@ export default function TastecraftApp({ demos = [], flips = [] }: { demos?: Demo
             </fieldset>
             <div className="mt-4 flex items-center gap-3 text-xs text-ink-2">
               <span>Playbook language</span>
-              <div role="radiogroup" aria-label="Playbook language" className="inline-flex rounded-full border border-line bg-paper/60 p-0.5">
+              <div
+                role="radiogroup"
+                aria-label="Playbook language"
+                // Radio pattern: one tab stop, arrow keys move the choice (like the recorded-run picker).
+                onKeyDown={(e) => {
+                  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+                  e.preventDefault();
+                  const langs = ["English", "Español"] as const;
+                  const next = langs[(form.language ?? "English") === "English" ? 1 : 0];
+                  setForm({ ...form, language: next });
+                  e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]")[langs.indexOf(next)]?.focus();
+                }}
+                className="inline-flex rounded-full border border-line bg-paper/60 p-0.5"
+              >
                 {(["English", "Español"] as const).map((l) => (
                   <button
                     key={l}
                     type="button"
                     role="radio"
                     aria-checked={(form.language ?? "English") === l}
+                    tabIndex={(form.language ?? "English") === l ? 0 : -1}
                     onClick={() => setForm({ ...form, language: l })}
                     className={`rounded-full px-3 py-1 transition pointer-coarse:min-h-10 pointer-coarse:px-4 ${(form.language ?? "English") === l ? "bg-ink text-paper" : "text-ink-2 hover:text-ink"}`}
                   >

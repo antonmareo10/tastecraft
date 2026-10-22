@@ -406,11 +406,12 @@ export default function PlaybookView({
                   <div className="mt-1.5 flex items-center justify-between gap-3">
                     {mv.lift != null && cl ? (
                       <InfoPopover
-                        label={`Crowd lift for this dish: ${liftLabel(mv.lift)}${low ? ", low count" : ""}. Show the local menu counts`}
+                        // Starts with the visible text ("×2.9 crowd lift"), so voice control and screen readers agree (WCAG 2.5.3).
+                        label={`${liftLabel(mv.lift)} ${low ? "crowd lift · low count" : "crowd lift"}: show the local menu counts behind it`}
                         title={`Crowd lift for this dish: ${liftLabel(mv.lift)}${low ? " (low count)" : ""}`}
                         trigger={
                           <>
-                            {liftLabel(mv.lift)}
+                            {liftLabel(mv.lift)}{" "}
                             <span aria-hidden className="font-normal opacity-80">
                               {low ? "crowd lift · low count" : "crowd lift"}
                             </span>

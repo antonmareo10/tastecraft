@@ -18,7 +18,7 @@ const SOURCES = {
 
 export default function About() {
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 pb-24 pt-6 sm:px-6">
+    <main id="main" className="mx-auto w-full max-w-4xl px-4 pb-24 pt-6 sm:px-6">
       <Link
         href="/"
         className="group inline-flex min-h-9 items-center gap-1.5 text-sm text-ink-2 underline decoration-line underline-offset-4 hover:text-ink"
@@ -168,7 +168,7 @@ export default function About() {
           that restaurant decide its specials on gut feel is where Tastecraft started.
         </p>
       </Block>
-    </div>
+    </main>
   );
 }
 
