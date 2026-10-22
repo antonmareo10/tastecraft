@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
+import type { QlooFlip } from "@/lib/flip";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
 import { gainPct, HELD_OUT } from "@/lib/benchmark";
 import { readNdjson } from "@/lib/ndjson";
@@ -14,6 +15,7 @@ import { scrollToElement } from "@/lib/scroll";
 import type { Step, TimelineItem } from "./Timeline";
 import type { LiveState } from "./PlaybookView";
 import HeroLight from "./HeroLight";
+import QlooSwitch from "./QlooSwitch";
 import ReplayCards, { type DemoSummary } from "./ReplayCards";
 import { KineticText, MagneticButton, Reveal } from "./fx";
 import { IconAlert, IconArrow } from "./icons";
@@ -63,7 +65,7 @@ type Phase = "idle" | "running" | "done" | "error";
 
 const timestamp = () => Date.now();
 
-export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] }) {
+export default function TastecraftApp({ demos = [], flips = [] }: { demos?: DemoSummary[]; flips?: QlooFlip[] }) {
   const [form, setForm] = useState<AgentRequest>({ restaurant: "", city: "", goal: GOALS[0], language: "English" });
   const [phase, setPhase] = useState<Phase>("idle");
   const [events, setEvents] = useState<AgentEvent[]>([]);
@@ -354,6 +356,16 @@ export default function TastecraftApp({ demos = [] }: { demos?: DemoSummary[] })
             </div>
           </form>
         </section>
+
+        {!started && flips.length > 0 && (
+          <QlooSwitch
+            flips={flips}
+            onPlay={(slug) => {
+              const d = demos.find((x) => x.slug === slug);
+              if (d) playDemo(d);
+            }}
+          />
+        )}
 
         {!started && <HowItWorks />}
 

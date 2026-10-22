@@ -9,6 +9,7 @@ import {
   isLowCount,
   LOW_COUNT_MENUS,
   parseBaselineDishes,
+  parseBaselineLines,
   planLift,
   rankTerms,
   smoothedLift,
@@ -175,5 +176,17 @@ describe("parseBaselineDishes", () => {
 
   it("returns nothing for free text", () => {
     expect(parseBaselineDishes("Add a pastrami melt and a soup.")).toEqual([]);
+  });
+});
+
+describe("parseBaselineLines", () => {
+  it("splits each baseline line into the dish and its reason, keeping dashes inside the reason", () => {
+    const text = "Dish 1: **Pastrami Melt** | Crispy - and cheap.\n- Dish 2: Matzo Ball Soup — A cosy bowl.\nDish 3: Bagel Platter\nEvent: Deli night";
+    expect(parseBaselineLines(text)).toEqual([
+      { dish: "Pastrami Melt", why: "Crispy - and cheap." },
+      { dish: "Matzo Ball Soup", why: "A cosy bowl." },
+      { dish: "Bagel Platter", why: "" },
+    ]);
+    expect(parseBaselineLines(text).map((d) => d.dish)).toEqual(parseBaselineDishes(text));
   });
 });

@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { AnimatePresence, m } from "motion/react";
 import { gainPct, HELD_OUT } from "@/lib/benchmark";
-import { dishLowCount, isLowCount, LOW_COUNT_MENUS, type TermLift } from "@/lib/lift";
+import { dishLowCount, isLowCount, liftLabel, LOW_COUNT_MENUS, type TermLift } from "@/lib/lift";
 import { displayMenuTerms, supportedFirst } from "@/lib/menu-terms";
 import { headerTags } from "@/lib/place-tags";
 import { EASE_OUT, REVEAL, STAGGER } from "@/lib/motion";
@@ -46,11 +46,6 @@ const DOMAIN_LABEL: Record<string, string> = {
   video_game: "Games",
   person: "People",
 };
-
-/** "×1.8" — crowd lift with one decimal. */
-export function liftLabel(v: number): string {
-  return `×${(Math.round(v * 10) / 10).toFixed(1)}`;
-}
 
 function termLine(t: TermLift, cl: Pick<CrowdLift, "crowd_n" | "city_n">): string {
   return `${t.term}: on the menus of ${t.crowd} of ${cl.crowd_n} restaurants your guests love most vs ${t.city} of ${cl.city_n} of the city's most popular (${liftLabel(t.lift)}${isLowCount(t) ? ", low count" : ""})`;

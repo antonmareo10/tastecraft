@@ -138,6 +138,11 @@ export function indexMenus(places: MenuPlace[]): Map<string, { count: number; la
 // them "low count" and never leads with them. The score itself is unchanged.
 export const LOW_COUNT_MENUS = 5;
 
+/** "×1.8": crowd lift with one decimal, as every screen prints it. */
+export function liftLabel(v: number): string {
+  return `×${(Math.round(v * 10) / 10).toFixed(1)}`;
+}
+
 /** True when a term's lift rests on fewer than LOW_COUNT_MENUS menus in both sets together. */
 export function isLowCount(t: { crowd: number; city: number }): boolean {
   return t.crowd + t.city < LOW_COUNT_MENUS;
@@ -279,6 +284,20 @@ export function rankTerms(
 const BASELINE_LINE = new RegExp(`^\\s*(?:[-*${ch(0x2022)}]\\s*)?(?:\\*\\*)?(?:dish|plato)\\s*\\d\\s*(?:\\*\\*)?\\s*[:.)${DASHES}-]\\s*(.+)$`, "i");
 const BASELINE_SPLIT = new RegExp(`\\s+\\|\\s+|\\s+[${DASHES}]\\s+|\\s+-\\s+`);
 const DECOR = new RegExp(`[*_"${ch(0x201c)}${ch(0x201d)}]`, "g");
+
+/** The generic baseline's dishes with the one-line reason the model gave for each ("Dish 1: <name> | <why>"). */
+export function parseBaselineLines(text: string): { dish: string; why: string }[] {
+  const out: { dish: string; why: string }[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = BASELINE_LINE.exec(line);
+    if (!m) continue;
+    const sep = BASELINE_SPLIT.exec(m[1]);
+    const dish = (sep ? m[1].slice(0, sep.index) : m[1]).replace(DECOR, "").trim();
+    const why = sep ? m[1].slice(sep.index + sep[0].length).replace(DECOR, "").trim() : "";
+    if (dish) out.push({ dish, why });
+  }
+  return out.slice(0, 3);
+}
 
 /** Pulls the three dish names out of the generic baseline ("Dish 1: <name> | <why>"). */
 export function parseBaselineDishes(text: string): string[] {
