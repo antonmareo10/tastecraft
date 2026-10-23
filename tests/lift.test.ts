@@ -13,6 +13,7 @@ import {
   planLift,
   rankTerms,
   smoothedLift,
+  splitGloss,
   stem,
   type MenuPlace,
 } from "@/lib/lift";
@@ -132,6 +133,53 @@ describe("planLift", () => {
 
   it("returns no score when nothing matches", () => {
     expect(planLift(["Kale Smoothie"], sets).lift).toBeNull();
+  });
+});
+
+describe("planLift with an English name (playbooks in other languages)", () => {
+  // Qloo's menu tags are mostly English: "Beef skewers", not "brochetas".
+  const sets = {
+    crowd: [place("C1", "Beef skewers", "Solomillo"), place("C2", "Chicken skewers"), place("C3", "Cheese boards"), place("C4", "Fries")],
+    city: [place("T1", "Solomillo"), place("T2", "Fries"), place("T3", "Fries"), place("T4", "Solomillo")],
+  };
+
+  it("matches a dish on the terms of both names, each term once", () => {
+    const plain = planLift(["Brocheta de solomillo"], sets);
+    expect(plain.dishes[0].terms.map((t) => t.term)).toEqual(["solomillo"]);
+    const both = planLift(["Brocheta de solomillo"], sets, ["Beef tenderloin skewer"]);
+    expect(both.dishes[0].terms.map((t) => t.term)).toEqual(["solomillo", "Beef", "skewer"]);
+    // skewer: crowd 2/4, city 0/4 -> (3/6)/(1/6) = 3
+    expect(both.dishes[0].terms.find((t) => t.term === "skewer")).toMatchObject({ crowd: 2, city: 0, lift: 3 });
+  });
+
+  it("changes nothing without an English name, or when it repeats the dish", () => {
+    const dishes = ["Brocheta de solomillo", "Loaded Fries"];
+    const base = planLift(dishes, sets);
+    expect(planLift(dishes, sets, [])).toEqual(base);
+    expect(planLift(dishes, sets, [undefined, "Loaded Fries"])).toEqual(base);
+  });
+
+  it("does not count a term twice when both names share it", () => {
+    const r = planLift(["Solomillo a la brasa"], sets, ["Grilled solomillo"]);
+    expect(r.dishes[0].terms.map((t) => t.term)).toEqual(["Solomillo"]);
+    expect(planLift(["Fries"], sets, ["Fries with aioli"]).dishes[0].terms).toHaveLength(1);
+  });
+
+  it("scores the baseline's dishes on their English names too", () => {
+    const { summary } = crowdLiftOf(["Brocheta de solomillo"], sets, "Gijón", ["Pincho de pollo"], ["Beef skewer"], ["Chicken skewer"]);
+    expect(summary.baseline?.dishes[0].terms.map((t) => t.term)).toEqual(["Chicken", "skewer"]);
+  });
+});
+
+describe("splitGloss", () => {
+  it("separates the English name the baseline adds in brackets", () => {
+    expect(splitGloss("Cachopo para compartir (Sharing cachopo)")).toEqual({ dish: "Cachopo para compartir", en: "Sharing cachopo" });
+    expect(splitGloss("Tortilla (de patata) (Spanish omelette)")).toEqual({ dish: "Tortilla (de patata)", en: "Spanish omelette" });
+  });
+
+  it("returns the name as it is when there is no trailing bracket", () => {
+    expect(splitGloss(" Pixín a la sidra ")).toEqual({ dish: "Pixín a la sidra" });
+    expect(splitGloss("Fabes (media ración) con almejas")).toEqual({ dish: "Fabes (media ración) con almejas" });
   });
 });
 

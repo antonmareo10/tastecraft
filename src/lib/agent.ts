@@ -8,7 +8,7 @@ import { matchConcerts } from "./concerts";
 import { EvidenceLedger } from "./ledger";
 import { withLens } from "./lens";
 import { describeLiveFailure } from "./limits";
-import { crowdLiftOf, parseBaselineDishes } from "./lift";
+import { crowdLiftOf, parseBaselineDishes, splitGloss } from "./lift";
 import { displayMenuTerms, supportedFirst } from "./menu-terms";
 import { QlooError } from "./qloo";
 import type { HarnessError } from "./qloo-harness";
@@ -103,6 +103,10 @@ const PlaybookSchema = z.object({
     .array(
       z.object({
         dish: z.string(),
+        dish_en: z
+          .string()
+          .optional()
+          .describe("Only when the playbook is not in English: the same dish's name in English. Used only to match Qloo's menu tags, which are mostly English"),
         description: z.string(),
         price: z.number(),
         why: z.string(),
@@ -722,7 +726,7 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
         return { ...m, evidence: v.items };
       });
       pb.verification = { checked, verified, qloo_facts: ledger.size };
-      pb.crowd_lift = await crowdLiftFor(pb, restaurant?.entity_id ?? pb.restaurant.qloo_entity_id, req.city, opts.baseline);
+      pb.crowd_lift = await crowdLiftFor(pb, restaurant?.entity_id ?? pb.restaurant.qloo_entity_id, req.city, opts.baseline, req.language);
       emit({ type: "playbook", playbook: pb });
       emit({ type: "tool_end", id, tool: "publish_playbook", summary: "Playbook ready" });
       return "Published.";
@@ -752,6 +756,10 @@ export async function runTastecraft(req: AgentRequest, emit: Emit, signal?: Abor
   const goal = req.goal?.trim() || "grow the business";
   const userMessage = `Restaurant: ${req.restaurant}\nCity: ${req.city}\nOwner's goal: ${goal}
 Playbook language: ${req.language ?? "English"}${
+    isEnglish(req.language)
+      ? ""
+      : "\nFor every menu move, also give the dish's English name in dish_en (it is only used to match Qloo's menu tags, which are mostly English)."
+  }${
     req.lens?.age || req.lens?.gender ? `\nAudience lens: ${JSON.stringify(req.lens)}` : ""
   }\n\nBuild their taste playbook.`;
 
@@ -904,6 +912,7 @@ async function crowdLiftFor(
   entityId: string | null | undefined,
   city: string,
   baseline: Promise<string | null> | undefined,
+  language?: string,
 ): Promise<CrowdLift | undefined> {
   if (!entityId) return undefined;
   try {
@@ -912,11 +921,17 @@ async function crowdLiftFor(
     const text = baseline
       ? await Promise.race([baseline.catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000))])
       : null;
+    // Outside English, both sides also carry each dish's English name (see planLift). In English
+    // nothing changes, so the benchmark and the recorded runs score exactly as before.
+    const english = isEnglish(language);
+    const generic = (text ? parseBaselineDishes(text) : []).map((d) => (english ? { dish: d } : splitGloss(d)));
     const { perDish, summary } = crowdLiftOf(
       pb.menu_moves.map((m) => m.dish),
       sets,
       city,
-      text ? parseBaselineDishes(text) : [],
+      generic.map((d) => d.dish),
+      english ? [] : pb.menu_moves.map((m) => m.dish_en),
+      generic.map((d) => d.en),
     );
     pb.menu_moves.forEach((m, i) => {
       m.lift = perDish[i]?.lift ?? null;
@@ -932,11 +947,18 @@ async function crowdLiftFor(
 // Same model, no tools, no Qloo: the "generic AI" answer we show side by side. The fixed line
 // format lets Tastecraft score its three dishes with the same crowd-lift formula as the playbook.
 export function baselinePrompt(req: AgentRequest): string {
+  // Outside English each dish also carries its English name, so both sides of the comparison are
+  // matched against Qloo's (mostly English) menu tags the same way.
+  const name = isEnglish(req.language) ? "<dish name>" : "<dish name> (<the same dish in English>)";
   return `I own the restaurant "${req.restaurant}" in ${req.city}. My goal: ${req.goal || "grow the business"}. Suggest three dishes to add and one event idea. Plain text, max 90 words, no markdown. Answer in ${req.language ?? "English"}, but keep these English line labels exactly:
-Dish 1: <dish name> | <why, one short sentence>
-Dish 2: <dish name> | <why>
-Dish 3: <dish name> | <why>
+Dish 1: ${name} | <why, one short sentence>
+Dish 2: ${name} | <why>
+Dish 3: ${name} | <why>
 Event: <event idea>`;
+}
+
+function isEnglish(language: string | undefined): boolean {
+  return !language || language === "English";
 }
 
 export async function genericBaseline(req: AgentRequest): Promise<string> {

@@ -42,6 +42,7 @@ export type Evidence = {
 
 export type MenuMove = {
   dish: string;
+  dish_en?: string; // the dish's English name when the playbook is in another language; only used to match Qloo's menu tags
   description: string;
   price: number;
   why: string;

@@ -187,15 +187,28 @@ export function dishTerms(dish: string, menus: (key: string) => number): { key: 
 const geoMean = (xs: number[]) => Math.exp(xs.reduce((s, x) => s + Math.log(x), 0) / xs.length);
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
-/** Crowd lift of every dish and of the plan, from the two Qloo restaurant sets. */
-export function planLift(dishes: string[], sets: CrowdSets): PlanLift {
+/** The terms of both names, each term once (the dish's own name first). */
+function mergeTerms(a: { key: string; label: string }[], b: { key: string; label: string }[]): { key: string; label: string }[] {
+  const seen = new Set(a.map((t) => t.key));
+  return [...a, ...b.filter((t) => !seen.has(t.key) && seen.add(t.key))];
+}
+
+/**
+ * Crowd lift of every dish and of the plan, from the two Qloo restaurant sets. `alts` holds, per
+ * dish, its English name for a playbook written in another language: Qloo's menu tags are mostly
+ * English ("skewer", not "brocheta"), so a dish is matched on the terms of both names, each once.
+ */
+export function planLift(dishes: string[], sets: CrowdSets, alts: readonly (string | undefined)[] = []): PlanLift {
   const crowdIdx = indexMenus(sets.crowd);
   const cityIdx = indexMenus(sets.city);
   const nA = sets.crowd.length;
   const nB = sets.city.length;
   const menus = (k: string) => (crowdIdx.get(k)?.count ?? 0) + (cityIdx.get(k)?.count ?? 0);
-  const out: DishLift[] = dishes.map((dish) => {
-    const terms = dishTerms(dish, menus).map(({ key, label }) => {
+  const out: DishLift[] = dishes.map((dish, i) => {
+    const alt = alts[i]?.trim();
+    const own = dishTerms(dish, menus);
+    const picked = alt && alt !== dish ? mergeTerms(own, dishTerms(alt, menus)) : own;
+    const terms = picked.map(({ key, label }) => {
       const a = crowdIdx.get(key)?.count ?? 0;
       const b = cityIdx.get(key)?.count ?? 0;
       return { term: label, crowd: a, city: b, lift: round2(smoothedLift(a, nA, b, nB)) };
@@ -215,9 +228,16 @@ export function planLift(dishes: string[], sets: CrowdSets): PlanLift {
 }
 
 /** The playbook's crowd-lift block: the plan's dishes and, when given, the no-Qloo baseline's, on the same sets. */
-export function crowdLiftOf(dishes: string[], sets: CrowdSets, city: string, baselineDishes: string[] = []) {
-  const plan = planLift(dishes, sets);
-  const baseline = baselineDishes.length ? planLift(baselineDishes, sets) : null;
+export function crowdLiftOf(
+  dishes: string[],
+  sets: CrowdSets,
+  city: string,
+  baselineDishes: string[] = [],
+  alts: readonly (string | undefined)[] = [],
+  baselineAlts: readonly (string | undefined)[] = [],
+) {
+  const plan = planLift(dishes, sets, alts);
+  const baseline = baselineDishes.length ? planLift(baselineDishes, sets, baselineAlts) : null;
   return {
     perDish: plan.dishes,
     summary: {
@@ -297,6 +317,18 @@ export function parseBaselineLines(text: string): { dish: string; why: string }[
     if (dish) out.push({ dish, why });
   }
   return out.slice(0, 3);
+}
+
+const GLOSS = /^(.*?\S)\s*\(([^()]+)\)$/;
+
+/**
+ * A baseline dish written as "<name> (<English name>)", the format the baseline is asked for when the
+ * playbook is not in English: { dish: "Cachopo para compartir", en: "Sharing cachopo" }. Without a
+ * trailing parenthesis the name is returned as it is.
+ */
+export function splitGloss(name: string): { dish: string; en?: string } {
+  const m = GLOSS.exec(name.trim());
+  return m ? { dish: m[1].trim(), en: m[2].trim() } : { dish: name.trim() };
 }
 
 /** Pulls the three dish names out of the generic baseline ("Dish 1: <name> | <why>"). */
