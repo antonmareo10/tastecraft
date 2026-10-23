@@ -1,7 +1,7 @@
-# Tastecraft — the taste data team for independent restaurants
+# Tastecraft: the taste data team for independent restaurants
 
 > Chains have insight teams. Independent restaurants decide their menu, their events and their marketing on gut feel.
-> **Tastecraft is an AI agent that reads Qloo's taste graph around a restaurant and turns it into decisions an owner can act on this week** — three dishes to test, an event, a ready-to-post campaign aimed at the right neighborhoods, and a supplier shopping list — with the Qloo evidence behind every call.
+> **Tastecraft is an AI agent that reads Qloo's taste graph around a restaurant and turns it into decisions an owner can act on this week**: three dishes to test, an event, a ready-to-post campaign aimed at the right neighborhoods and a supplier shopping list, with the Qloo evidence behind every call.
 
 **Live demo:** **https://tastecraft-xi.vercel.app** · **Video (2:22): https://youtu.be/_q3ysYWMk7Q** · Built for the Qloo Agentic Hackathon (2026), from scratch during its submission period (30 Sep – 30 Oct 2026): the repository starts from `create-next-app` on 16 Oct 2026 (`git log --reverse`).
 
@@ -29,7 +29,7 @@ The held-out check shows that most of the gap between those numbers and +27% com
 | **Technological implementation** (how thoroughly and skillfully Qloo is used) | Eight Qloo workflows ([below](#how-tastecraft-uses-qloo)): seven over `/search`, `/entities`, `/v2/insights` (entity, tag, demographics and heatmap outputs) and `/v2/analysis/compare`, and concert ranking through Qloo's official qloo-harness `rank` workflow; a crowd-vs-city contrast built from two Qloo queries that separates what a crowd favours from what is popular everywhere ([src/lib/lift.ts](src/lib/lift.ts)); every cited Qloo name and score checked against the run's own Qloo responses ([src/lib/ledger.ts](src/lib/ledger.ts)); bounded retries and request smoothing like Qloo's official client; unit tests that need no keys or network, and CI. |
 | **Design** | Streaming agent log, live playbook draft, a one-click Qloo on/off switch on the home page, taste constellation, taste map, per-dish evidence with ✓/⚠, side-by-side with/without Qloo, PDF export, English/Spanish. |
 | **Potential impact** | Independent restaurants (more than 7 in 10 US restaurants are single-unit) get an insight team's output: dishes, an event, a campaign, a shopping list and a week plan. MCP endpoint so POS or reservation assistants can call it. Price, cost to serve, channels and market: [Business case](#business-case). |
-| **Quality of the idea** (creative, non-obvious use of Qloo) | Uses the audience's *other* tastes (places, music, brands) and contrasts them with the city to find what is specific to this crowd — for example, Katz's guests' other favourite places are cheap pizza slices, hot-dog counters and dive bars, which leads to a weeknight pub-snack menu rather than more deli classics. |
+| **Quality of the idea** (creative, non-obvious use of Qloo) | Uses the audience's *other* tastes (places, music, brands) and contrasts them with the city to find what is specific to this crowd. For example, Katz's guests' other favourite places are cheap pizza slices, hot-dog counters and dive bars, which leads to a weeknight pub-snack menu rather than more deli classics. |
 
 ## How this maps to Qloo's submission guide
 
@@ -50,7 +50,7 @@ Ask a general-purpose LLM what a tapas bar in Madrid should add to its menu and 
 | Question an owner has | What Tastecraft asks Qloo | Endpoint |
 |---|---|---|
 | Is my restaurant in the graph, and how is it tagged? | Entity search (falls back to the name alone when the city words drown it) | `GET /search`, `GET /entities` |
-| What else do my guests love — nearby places, music, brands, films? | Cross-domain affinity from the restaurant entity (places filtered to the city; other domains localised with a location signal) | `GET /v2/insights` (`filter.type=urn:entity:*`) |
+| What else do my guests love: nearby places, music, brands, films? | Cross-domain affinity from the restaurant entity (places filtered to the city; other domains localised with a location signal) | `GET /v2/insights` (`filter.type=urn:entity:*`) |
 | What does my crowd favour that the city at large doesn't? | **Crowd vs city:** the ~150 restaurants my audience loves most vs the city's ~150 most popular, compared tag by tag and menu term by menu term (lift) | `GET /v2/insights` (`filter.type=urn:entity:place`, `filter.tags=…restaurant`, with and without `signal.interests.entities`) |
 | Which dishes, cuisines and vibes does my crowd lean towards? | Taste analysis on tag families (specialty dishes, menu highlights, cuisines, ambience) | `GET /v2/insights` (`filter.type=urn:tag`) |
 | Who are my guests? | Age and gender over/under-indexing | `GET /v2/insights` (`filter.type=urn:demographics`) |
@@ -67,16 +67,17 @@ Qloo's tag affinity is percentile-like and saturates at the top for any audience
 - Term lift = share of crowd restaurants whose menu tags mention it ÷ share of city restaurants that do, add-one smoothed (×1.0 = no difference). Dish and plan scores are geometric means.
 - **The ruler comes from Qloo.** Crowd lift is computed from Qloo's own menu tags, so it tests whether dishes follow this crowd's Qloo signal, not demand.
 - **Low count.** A term on fewer than 5 menus in both lists together (4 vs 0 already reads about ×4.8 after smoothing) is marked *low count* wherever it appears, and lists lead with better-supported terms. The score itself is unchanged.
+- **Playbooks in Spanish.** Qloo's menu tags are mostly English ("skewer", not "brocheta"), so when a playbook is written in another language each dish also carries its English name, on both sides of the comparison, and the terms of the two names count once each. English playbooks, the recorded runs and the benchmark score exactly as before.
 - Computed on the server from Qloo data and the dish names, never written by the model. The same function scores the no-Qloo baseline, the benchmark ([scripts/benchmark.ts](scripts/benchmark.ts)) and the replays.
 
 ## What the owner gets
 
 - **Crowd lift** for the plan and for each dish, with the local-menu counts behind it, next to the same score for a quick no-Qloo answer from the same model (one low-effort call capped at 90 words; the benchmark compares at equal effort).
-- **Audience taste DNA** — places, artists, brands and titles their guests love, with Qloo affinity scores.
-- **Cravings & crowd** — the menu terms their crowd's favourite restaurants serve far more (or less) often than the city's, Qloo's cuisine and vibe leanings, and an age/gender profile.
-- **Taste map** — where people with this taste live and go out, with named neighborhoods to target.
-- **Head-to-head** — what only this restaurant, or only its closest rival, is known for.
-- **Taste gaps** — cuisines, formats and vibes the crowd's favourite places have that the restaurant lacks.
+- **Audience taste DNA:** places, artists, brands and titles their guests love, with Qloo affinity scores.
+- **Cravings & crowd:** the menu terms their crowd's favourite restaurants serve far more (or less) often than the city's, Qloo's cuisine and vibe leanings, and an age/gender profile.
+- **Taste map:** where people with this taste live and go out, with named neighborhoods to target.
+- **Head-to-head:** what only this restaurant, or only its closest rival, is known for.
+- **Taste gaps:** cuisines, formats and vibes the crowd's favourite places have that the restaurant lacks.
 - **Three menu moves** with price, rationale and the Qloo evidence behind them (cited names and scores checked); **an event and a playlist**; **a ready-to-post Instagram caption and collab partners**; **a supplier shopping list** (CSV and order email); **a 7-day plan**. English or Spanish, and save as PDF.
 
 ## How the agent works
@@ -133,7 +134,7 @@ Numbers marked *hypothesis* are not tested yet; everything else is measured or s
 
 ## Use it from any agent (MCP)
 
-Tastecraft is also an MCP server, so an existing agent — Claude Desktop, Cursor, or a restaurant's own POS assistant — can call it:
+Tastecraft is also an MCP server, so an existing agent (Claude Desktop, Cursor or a restaurant's own POS assistant) can call it:
 
 ```json
 { "tastecraft": { "url": "https://tastecraft-xi.vercel.app/api/mcp" } }
@@ -207,8 +208,8 @@ Next.js 16 (App Router) · React 19 · Tailwind CSS 4 · Anthropic TypeScript SD
 
 ## Who built it
 
-Antonio González Fernández — Business Administration + Data Science student (CUNEF, Madrid). Tastecraft grows out of building [Supplora](https://www.supplora.app), my earlier product: an AI tool that reads a family-run restaurant's supplier delivery notes and loads them into its management system. Working with restaurant owners made the gap obvious: they have the purchasing data, but no way to know what their own guests actually want.
+Antonio González Fernández, Business Administration and Data Science student at CUNEF (Madrid). Tastecraft grows out of building [Supplora](https://www.supplora.app), an AI tool that read 715 supplier delivery notes for a family-run restaurant in Spain by September 2026 and loaded them into its management system. Working in that kitchen made the gap obvious: the owners know their costs to the cent, but decide their specials on gut feel.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

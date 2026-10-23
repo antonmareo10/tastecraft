@@ -69,7 +69,7 @@ export default function About() {
 
       <Block title="What Tastecraft does">
         <p>
-          It starts from the people who already love a restaurant — as seen in Qloo’s cross-domain taste graph — and reads
+          It starts from the people who already love a restaurant, as seen in Qloo’s cross-domain taste graph, and reads
           what else they love: nearby places, music, brands, films, dishes, vibes, even where in the city they live. Then a
           Claude agent turns that into three dishes to test, an event, a ready-to-post campaign aimed at the right
           neighborhoods, a supplier shopping list and a 7-day launch plan.
