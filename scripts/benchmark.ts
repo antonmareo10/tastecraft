@@ -165,6 +165,8 @@ const table = ok
 
 const summary = `# Tastecraft benchmark: dishes with and without Qloo
 
+> **Newer and larger:** the held-out check below was repeated on 30 restaurants (22 new ones, picked and committed before the run): [HELDOUT_30.md](HELDOUT_30.md). Quote those numbers; the 8-restaurant results on this page are the earlier, smaller runs.
+
 Run on ${ranAt.slice(0, 10)} with \`npm run benchmark\` (scripts/benchmark.ts), model \`${MODEL}\`.${rescoredAt ? ` Scores recomputed on ${rescoredAt.slice(0, 10)} with \`npm run benchmark -- --rescore\` (same saved dishes, no new model calls; the full-agent column reflects the local recordings at that time).` : ""} ${ok.length} of ${rows.length} restaurants completed${rows.length - ok.length ? ` (${rows
   .filter((r) => r.error)
   .map((r) => `${r.restaurant}: ${r.error}`)

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { AnimatePresence, m } from "motion/react";
-import { gainPct, HELD_OUT } from "@/lib/benchmark";
+import { gainCi, gainPct, HELD_OUT, HELD_OUT_SHOWN } from "@/lib/benchmark";
 import { dishLowCount, isLowCount, liftLabel, LOW_COUNT_MENUS, type TermLift } from "@/lib/lift";
 import { displayMenuTerms, supportedFirst } from "@/lib/menu-terms";
 import { headerTags } from "@/lib/place-tags";
@@ -53,7 +53,7 @@ function termLine(t: TermLift, cl: Pick<CrowdLift, "crowd_n" | "city_n">): strin
 
 const LOW_COUNT_HELP = `Low count: the term is on fewer than ${LOW_COUNT_MENUS} menus in both lists together, so its lift rests on a handful of restaurants (4 menus vs 0 already reads about ×4.8). Treat it as a hint, not a measurement.`;
 
-const LIFT_HELP = `Crowd lift compares two Qloo lists for the city: the ~150 restaurants this crowd loves most (Qloo affinity) and the city's ~150 most popular restaurants, counting only the ones with menu tags in Qloo. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. The ruler is Qloo's own menu tags: it measures whether dishes follow this crowd's Qloo signal, not demand. Computed by Tastecraft, never written by the model. The agent sees this crowd-vs-city contrast while planning, so a playbook's own score is in-sample; on restaurants the model never saw, the benchmark measured ${gainPct(HELD_OUT.ratio)} over the same model alone. ${LOW_COUNT_HELP} It says nothing about how many covers a dish will sell.`;
+const LIFT_HELP = `Crowd lift compares two Qloo lists for the city: the ~150 restaurants this crowd loves most (Qloo affinity) and the city's ~150 most popular restaurants, counting only the ones with menu tags in Qloo. For each food term in a dish name, it divides the share of the crowd's restaurants that serve it by the share of the city's that do (add-one smoothed). ×1.0 = no difference; above 1 = your crowd favours it. The ruler is Qloo's own menu tags: it measures whether dishes follow this crowd's Qloo signal, not demand. Computed by Tastecraft, never written by the model. The agent sees this crowd-vs-city contrast while planning, so a playbook's own score is in-sample; on ${HELD_OUT.restaurants} restaurants the model never saw, a pre-registered test measured ${gainPct(HELD_OUT.ratio)} over the same model alone (${gainCi(HELD_OUT)})${HELD_OUT_SHOWN ? "" : ", not enough to rule out no difference"}. ${LOW_COUNT_HELP} It says nothing about how many covers a dish will sell.`;
 
 const VERIFY_HELP =
   "Each evidence line cites the Qloo names (places, artists, tags) and 0-100 scores it relies on. The server checks that every cited name was returned by Qloo in this run and that every cited score is within 1 of a number Qloo returned for that name. Other numbers in the sentence, such as menu shares, are not checked.";
@@ -194,7 +194,8 @@ export default function PlaybookView({
                   {lowDishes > 0
                     ? `, and ${lowDishes} of ${p.crowd_lift.total} dishes rest on terms found on fewer than ${LOW_COUNT_MENUS} menus (low count)`
                     : ""}
-                  . On restaurants the model never saw, Qloo’s contrast measured {gainPct(HELD_OUT.ratio)} over the same model alone.{" "}
+                  . On {HELD_OUT.restaurants} restaurants the model never saw, Qloo’s contrast measured {gainPct(HELD_OUT.ratio)} over the same
+                  model alone{HELD_OUT_SHOWN ? "" : `, not proven (${gainCi(HELD_OUT)})`}.{" "}
                   <HowLink label="How is crowd lift measured?" title="Crowd lift" tone="dark">
                     {LIFT_HELP}
                   </HowLink>
@@ -1164,10 +1165,12 @@ function Compare({ baseline, playbook: p }: { baseline: string; playbook: Playbo
       <p className="mb-3 text-[12px] leading-snug text-muted">
         This run is not a like-for-like test. The left column is one quick call to the same model (no tools, no Qloo data, low
         effort, at most 90 words); the agent works with Qloo at medium effort and sees the crowd-vs-city contrast this score is built
-        on. The fair test is the benchmark: same model and effort in every arm, scored on restaurants the model never saw. There,
-        Qloo’s contrast scored ×{HELD_OUT.withQloo.toFixed(2)} against ×{HELD_OUT.alone.toFixed(2)} for the model alone:{" "}
-        {gainPct(HELD_OUT.ratio)} per restaurant (95% CI {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in{" "}
-        {HELD_OUT.better} of {HELD_OUT.restaurants}.{" "}
+        on. The fair test is the benchmark: same model and effort in every arm, scored on restaurants the model never saw. In a
+        pre-registered run on {HELD_OUT.restaurants} new restaurants, Qloo’s contrast scored ×{HELD_OUT.withQloo.toFixed(2)} against{" "}
+        ×{HELD_OUT.alone.toFixed(2)} for the model alone: {gainPct(HELD_OUT.ratio)} per restaurant ({gainCi(HELD_OUT)}), better in{" "}
+        {HELD_OUT.better} of {HELD_OUT.restaurants}
+        {HELD_OUT_SHOWN ? "." : ", not enough to rule out no difference."} Against Qloo’s affinity data alone it scored{" "}
+        {gainPct(HELD_OUT.vsAffinity.ratio)} ({gainCi(HELD_OUT.vsAffinity)}).{" "}
         <a href={HELD_OUT.url} target="_blank" rel="noopener noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
           Benchmark
         </a>

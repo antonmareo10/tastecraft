@@ -289,7 +289,7 @@ Limits of this check: half-size sets make each term count noisier; one sample pe
   const anchor = "\n## Why the old Taste-Fit score could not tell plans apart";
   fs.writeFileSync(
     summaryFile,
-    marked.test(summary) ? summary.replace(marked, block) : summary.includes(anchor) ? summary.replace(anchor, `\n${block}\n${anchor}`) : `${summary}\n${block}\n`,
+    marked.test(summary) ? summary.replace(marked, () => block) : summary.includes(anchor) ? summary.replace(anchor, `\n${block}\n${anchor}`) : `${summary}\n${block}\n`,
   );
   console.log(
     `\nWrote the held-out block of eval/SUMMARY.md. Model calls: ${usage.calls} (${usage.input} in / ${usage.output} out${cost != null ? `, about US$${cost.toFixed(2)}` : ""}).`,
@@ -439,7 +439,7 @@ ${sub("Price $$$ or $$$$", (i) => i.price.length >= 3)}
   fs.writeFileSync(
     reportFile,
     marked.test(existing)
-      ? existing.replace(marked, block)
+      ? existing.replace(marked, () => block) // a function, so "$$" in the text is not read as a replacement pattern
       : `# Held-out check on 30 restaurants (pre-registered)\n\n${block}\n\n## Where it fails\n\n(one line per restaurant above, written after reading the results)\n`,
   );
   const r4 = (r: { ratio: number; low: number; high: number }) => ({ ratio: +r.ratio.toFixed(4), low: +r.low.toFixed(4), high: +r.high.toFixed(4) });

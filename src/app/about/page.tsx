@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { KineticText, NumberReveal, Reveal } from "@/components/fx";
-import { gainPct, HELD_OUT } from "@/lib/benchmark";
+import { gainCi, gainPct, HELD_OUT, HELD_OUT_SHOWN } from "@/lib/benchmark";
 
 export const metadata: Metadata = {
   title: "About · Tastecraft",
@@ -82,13 +82,17 @@ export default function About() {
           this crowd’s Qloo signal, not whether guests will order them.
         </p>
         <p>
-          Does Qloo make the dishes better? On restaurants the model never saw (8 restaurants in 8 cities, same model and effort
-          in every arm), Qloo’s crowd-vs-city signal gave {gainPct(HELD_OUT.ratio)} over the same model alone (95% CI{" "}
-          {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in {HELD_OUT.better} of {HELD_OUT.restaurants}. A
-          playbook’s own score is higher because the agent sees the contrast it is scored on, so this held-out gain is the
-          number to quote.{" "}
+          Does Qloo make the dishes better? I tested it on {HELD_OUT.restaurants} restaurants the model never saw, picked and
+          committed before the run, with the same model and effort in every arm. Qloo’s crowd-vs-city signal gave{" "}
+          {gainPct(HELD_OUT.ratio)} over the same model alone ({gainCi(HELD_OUT)}), better in {HELD_OUT.better} of{" "}
+          {HELD_OUT.restaurants}
+          {HELD_OUT_SHOWN ? "." : ": not enough to rule out no difference, and smaller than the +27% my first 8 restaurants suggested."}{" "}
+          Against Qloo’s affinity data alone, which scored below the model alone, the crowd-vs-city signal is clearly better:{" "}
+          {gainPct(HELD_OUT.vsAffinity.ratio)} ({gainCi(HELD_OUT.vsAffinity)}), better in {HELD_OUT.vsAffinity.better} of{" "}
+          {HELD_OUT.restaurants}. A playbook’s own score is higher because the agent sees the contrast it is scored on, so the
+          held-out numbers are the ones to quote.{" "}
           <a href={HELD_OUT.url} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
-            Method and limits
+            Method, results and where it fails
           </a>
           .
         </p>

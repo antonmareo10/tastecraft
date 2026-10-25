@@ -13,14 +13,34 @@
 4. Scroll to **Three dishes to test**: each dish shows its lift and the local-menu counts behind it, lifts that rest on fewer than 5 menus are marked *low count*, and each evidence line is marked ✓ when every Qloo name and score it cites was returned in that run (other numbers in the text are not checked). **Cravings** shows what is specific to this crowd ("On your crowd's menus" vs the city), and **Head-to-head** shows what only this restaurant, or only its closest rival, is known for.
 5. Want it live? Type any restaurant and city. A live run takes about **2 minutes** (median 128 s over 5 runs, 102–178 s) and live runs are capped per day; replays are always instant.
 
-**The headline number: +27% over the same model alone, on restaurants it never saw.** The details are in **[eval/SUMMARY.md](eval/SUMMARY.md)**. On 8 restaurants in 8 cities, with the same model at the same effort in every arm and every dish scored only on a held-out half of each Qloo restaurant set (5 random splits), the model's dishes score **×0.90** crowd lift on their own, **×1.00** when given Qloo affinity data, and **×1.15** with Tastecraft's crowd-vs-city contrast computed on the other half: **×1.27 the model alone per restaurant (95% bootstrap interval ×1.07–×1.48)**, better in 6 of 8 restaurants and 29 of 40 plans. With this sample it cannot be told apart from Qloo affinity data alone (×1.15, interval ×0.89–×1.53). The ruler is Qloo's own menu tags, so this measures whether the dishes follow the crowd's Qloo signal, not whether guests will order them.
+**The headline number: +10% over the same model alone, on 22 restaurants it never saw, and by my own pre-registered rule that is not proven.** Before running anything I committed the 22 restaurants, the metric and the decision rule ([eval/PREREGISTRATION_30.md](eval/PREREGISTRATION_30.md), commit `9a147de`). The result, whatever it was, is in **[eval/HELDOUT_30.md](eval/HELDOUT_30.md)**. With the same model at the same effort in every arm and every dish scored only on a held-out half of each Qloo restaurant set (5 random splits), the model's dishes score **×1.11** crowd lift on their own, **×0.95** when given Qloo affinity data, and **×1.22** with Tastecraft's crowd-vs-city contrast computed on the other half: **×1.10 the model alone per restaurant (95% bootstrap interval ×0.96 to ×1.27)**, better in 13 of 22 restaurants and 60 of 110 plans. The interval includes ×1, so this sample cannot tell the gain from no difference.
 
-Other numbers you will see, and why they are larger:
+Two results are clear. Qloo's affinity data on its own scored below the model alone (×0.85, interval ×0.73 to ×0.99), and the crowd-vs-city contrast beats it: **×1.29 (×1.16 to ×1.44), better in 19 of 22**. Raw affinity leans towards what is popular everywhere; the contrast is what makes Qloo's signal specific to one crowd. The ruler is Qloo's own menu tags, so all of this measures whether the dishes follow the crowd's Qloo signal, not whether guests will order them. `npm run eval:heldout` reproduces it ([how](#run-it-locally)).
 
+Other numbers you will see, and why they differ:
+
+- **The first held-out check, on 8 restaurants**, gave +27% (×1.07 to ×1.48), better in 6 of 8. Those 8 were the restaurants I built the scoring on. Run again inside the 30-restaurant check they give +23% (×0.96 to ×1.63), and all 30 together give +13% (×1.00 to ×1.29), better in 18 of 30. The rule I committed says the headline is the lower of the 22-new and all-30 numbers, so it is +10%.
 - **The badge on each recorded playbook** (×2.8 Gjelina, ×2.9 Katz's, ×3.2 Casa Lucio; geometric mean ×2.95 against ×0.88 for the same runs' no-Qloo quick answers, n = 3) is in-sample and not like-for-like: the agent sees the contrast it is scored on and works at medium effort, while the quick answer is one low-effort call capped at 90 words.
-- **The in-sample benchmark** (same model and effort, scored on the restaurants whose contrast the model was shown) reads ×0.91 / ×1.02 / ×2.44.
+- **The in-sample benchmark** (8 restaurants, same model and effort, scored on the restaurants whose contrast the model was shown) reads ×0.91 / ×1.02 / ×2.44. In the 30-restaurant run, the arm that saw the scored half reads ×1.50 the model alone on the 22 new restaurants against ×1.10 for the held-out arm: most of the in-sample gain comes from seeing the scored restaurants.
 
-The held-out check shows that most of the gap between those numbers and +27% comes from seeing the scored restaurants.
+### Where it fails
+
+The contrast did not beat the model alone in 12 of the 30 restaurants. In 10 of them the model alone already scored above ×1 by staying with the restaurant's own cuisine, and the contrast pulled it towards dishes that the crowd's places in the scoring half serve no more often than the city's (part of this is regression to the mean). It loses most at casual places: at $ and $$ it wins in 3 of 11 new restaurants, at $$$ and $$$$ in 10 of 11 (exploratory). One line each, worst first; the numbers are the held-out arm's score divided by the model alone's:
+
+- Mustafa's Gemüse Kebap, Berlin (×0.61): kebab-stand staples alone, cheese fries and cheesecake with the contrast.
+- Buddy's Pizza, Detroit (×0.70): Detroit-style squares alone, bar food around the pizza with the contrast.
+- Mary Mac's Tea Room, Atlanta (×0.71): Southern family classics alone, po'boys, wings and egg rolls with the contrast.
+- Au Cheval, Chicago (×0.73, one of the first 8): the diner's burgers alone, steak frites and skillets with the contrast.
+- Contramar, Mexico City (×0.75): Mexican seafood alone (×1.82, the second-best no-Qloo score), paella and risotto with the contrast.
+- Bouillon Chartier, Paris (×0.76): the bouillon's French classics alone, lasagne and tiramisu with the contrast.
+- Lotus of Siam, Las Vegas (×0.84): Northern Thai classics alone, fusion bao and karaage with the contrast.
+- The Original Ninfa's on Navigation, Houston (×0.84): fajitas and birria alone, soups, tortas and margarita kits with the contrast.
+- Dishoom, London (×0.85, one of the first 8): Bombay street food alone, brunch fusion with the contrast.
+- Versailles Restaurant, Miami (×0.90): Cuban comfort food alone, Peruvian and seafood plates with the contrast.
+- Mama's Fish House, Maui (×0.93, one of the first 8): the same poke and fish tacos in both arms; within noise.
+- Hodad's, San Diego (×0.95): both arms below ×1; within noise.
+
+It helps most where the model alone is weak: Commander's Palace goes from ×0.72 alone to ×1.59, Casa Lucio from ×0.59 to ×1.56. The full lines are in [eval/HELDOUT_30.md](eval/HELDOUT_30.md#where-it-fails).
 
 ## How this maps to the judging criteria
 
@@ -103,14 +123,14 @@ Browser ──POST /api/agent──▶ Next.js route (streams NDJSON events)
 
 - Qloo responses are cached privately on the server (6 h) and never committed. The API key is only sent from the server in the `X-Api-Key` header; it never reaches the browser, a prompt or a log.
 - Recorded runs contain Qloo data, so `src/data/demos.json` is gitignored. Deployments get them as an **encrypted** file downloaded at build time from a private URL (`TASTECRAFT_DEMOS_URL`, AES-256-GCM with `TASTECRAFT_DEMOS_KEY`); without those variables the app simply runs live-only. See [scripts/pack-demos.mjs](scripts/pack-demos.mjs) and [scripts/ensure-demos.mjs](scripts/ensure-demos.mjs).
-- Benchmark raw results stay in a gitignored file; [eval/SUMMARY.md](eval/SUMMARY.md) has aggregates only.
+- Benchmark raw results stay in gitignored files (`eval/*.local.json`); [eval/SUMMARY.md](eval/SUMMARY.md) and [eval/HELDOUT_30.md](eval/HELDOUT_30.md) have aggregates and restaurant names only.
 - No personal data goes to Qloo: the only signal is the restaurant itself (a public place entity), the city and an optional age/gender *bucket*.
 
 ## Known limitations: what the results do not establish
 
 - **Affinity and lift are not demand.** They describe what people who like the restaurant tend to like, in aggregate; they do not say how many covers a dish will sell. The plan is a one-week test for that reason.
 - **Qloo's audience is not the till receipt.** The audience is people whose tastes connect to the restaurant in Qloo's graph, not its actual customers.
-- **Crowd lift is a proxy built on menu tags.** Dish names are matched to local menu tags by words, so creative names can match nothing (excluded from the score) or a generic word; per-term counts are often single digits. The benchmark covers 8 restaurants. Its in-sample crowd-vs-city arm sees the same contrast it is scored on; on held-out restaurants the gain shrinks from ×2.44 vs ×0.91 to ×1.15 vs ×0.90 and cannot be told apart from Qloo affinity data alone ([details](eval/SUMMARY.md)).
+- **Crowd lift is a proxy built on menu tags.** Dish names are matched to local menu tags by words, so creative names can match nothing (excluded from the score) or a generic word; per-term counts are often single digits. The held-out check covers 30 restaurants, 22 of them new and committed before the run. On those 22 the gain over the same model alone is +10% and not proven (95% interval ×0.96 to ×1.27); the gain over Qloo affinity data alone is clear (×1.29, ×1.16 to ×1.44). The arm that sees the contrast it is scored on reads much higher, which is why the playbook badges are labelled in-sample ([details](eval/HELDOUT_30.md)).
 - **The head-to-head describes positioning, not audiences.** With one place per side, Qloo's compare endpoint returns each place's own tags; Tastecraft shows the ones only one place carries and no score.
 - **Coverage varies.** Small or new restaurants may be missing or thin in the graph, menu tags are richer in some cities than others, and a city name can resolve broadly (for example "New York" to the state).
 - **The interpretation can be wrong.** Verification checks every cited name and score against Qloo's responses, not the reasoning built on them.
@@ -183,8 +203,12 @@ Checks and evaluation:
 npm test                  # unit tests (no keys, no network)
 npm run benchmark         # with/without-Qloo benchmark -> eval/SUMMARY.md (needs both keys; ~24 short model calls)
 npm run benchmark -- --rescore   # rescore the saved dishes with the current formula, no model calls
-npm run benchmark:holdout # held-out check: contrast from one half of each Qloo set, scored on the other (160 short model calls, ~US$2)
+npm run benchmark:holdout # held-out check on the first 8 restaurants (160 short model calls, ~US$2)
+npm run eval:heldout      # the pre-registered held-out check on 30 restaurants -> eval/HELDOUT_30.md (600 short model calls, ~US$7)
+npm run eval:heldout -- --summary   # rewrite eval/HELDOUT_30.md from the saved results, no calls
 ```
+
+`npm run eval:heldout` reproduces the headline number. It reads both keys from `.env.local` or the environment, runs the 22 restaurants of [eval/heldout30.restaurants.json](eval/heldout30.restaurants.json) and then the original 8, and resumes where it stopped if a call fails (delete `eval/holdout30.local.json` to start over). Model sampling is not deterministic, so a new run gives close numbers, not identical ones. The raw results stay in that gitignored file because they contain Qloo data.
 
 Recorded runs for instant replays (stored locally, never committed):
 

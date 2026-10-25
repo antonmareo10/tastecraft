@@ -2,7 +2,7 @@
 
 import { useState, type KeyboardEvent } from "react";
 import { m } from "motion/react";
-import { gainPct, HELD_OUT } from "@/lib/benchmark";
+import { gainCi, gainPct, HELD_OUT, HELD_OUT_SHOWN } from "@/lib/benchmark";
 import type { FlipDish, QlooFlip } from "@/lib/flip";
 import { liftLabel } from "@/lib/lift";
 import { EASE_OUT, SPRING } from "@/lib/motion";
@@ -160,8 +160,9 @@ export default function QlooSwitch({ flips, onPlay }: { flips: QlooFlip[]; onPla
       <Reveal className="lg:col-start-1 lg:row-start-2">
         <p className="max-w-md text-[12px] leading-snug text-muted">
           Both scores use the same crowd-lift formula on this run’s Qloo data. They are in-sample and not like-for-like: the agent saw the
-          crowd-vs-city contrast it is scored on, and the no-Qloo answer is one quick, low-effort call. On restaurants the model never saw,
-          the fair test measured {gainPct(HELD_OUT.ratio)} for Qloo over the same model alone ·{" "}
+          crowd-vs-city contrast it is scored on, and the no-Qloo answer is one quick, low-effort call. On {HELD_OUT.restaurants} restaurants
+          the model never saw, the fair test measured {gainPct(HELD_OUT.ratio)} for Qloo over the same model alone
+          {HELD_OUT_SHOWN ? "" : `, not proven (${gainCi(HELD_OUT)})`} ·{" "}
           <a href={HELD_OUT.url} target="_blank" rel="noopener noreferrer" className="underline decoration-line underline-offset-2 hover:text-ink">
             method
           </a>

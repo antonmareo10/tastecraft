@@ -1,5 +1,7 @@
 # Tastecraft benchmark: dishes with and without Qloo
 
+> **Newer and larger:** the held-out check below was repeated on 30 restaurants (22 new ones, picked and committed before the run): [HELDOUT_30.md](HELDOUT_30.md). Quote those numbers; the 8-restaurant results on this page are the earlier, smaller runs.
+
 Run on 2026-10-20 with `npm run benchmark` (scripts/benchmark.ts), model `claude-opus-5-5`. Scores recomputed on 2026-10-20 with `npm run benchmark -- --rescore` (same saved dishes, no new model calls; the full-agent column reflects the local recordings at that time). 8 of 8 restaurants completed. 24 model calls (the two Qloo-grounded arms used 32699 input and 4059 output tokens in total). The restaurants were fixed before the run: the ten in eval/restaurants.json minus the second pick in New York and in Los Angeles (Joe's Pizza, AC Barbeque), so each city counts once.
 
 ## What is measured

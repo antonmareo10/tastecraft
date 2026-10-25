@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import type { QlooFlip } from "@/lib/flip";
 import type { AgentEvent, AgentRequest } from "@/lib/types";
-import { gainPct, HELD_OUT } from "@/lib/benchmark";
+import { gainCi, gainPct, HELD_OUT, HELD_OUT_SHOWN } from "@/lib/benchmark";
 import { readNdjson } from "@/lib/ndjson";
 import { stepLabel } from "@/lib/lens";
 import { favoursSummary } from "@/lib/menu-terms";
@@ -214,14 +214,16 @@ export default function TastecraftApp({ demos = [], flips = [] }: { demos?: Demo
                   <div className="fade-up font-display text-5xl leading-none tabular-nums text-olive" style={{ "--d": "760ms" } as React.CSSProperties}>
                     {gainPct(HELD_OUT.ratio)}
                   </div>
-                  <div className="mt-1 max-w-[7.5rem] text-[11px] leading-tight text-muted">vs the same model alone</div>
+                  <div className="mt-1 max-w-[7.5rem] text-[11px] leading-tight text-muted">
+                    vs the same model alone{HELD_OUT_SHOWN ? "" : ", not proven"}
+                  </div>
                 </div>
                 <p className="text-[13px] leading-snug text-ink-2">
-                  <span className="font-semibold text-ink">Measured on restaurants it never saw.</span> With Qloo’s crowd-vs-city
-                  signal, Claude’s dish ideas lean {gainPct(HELD_OUT.ratio).slice(1)} further towards what each restaurant’s crowd
-                  favours than without it (95% CI {gainPct(HELD_OUT.ciLow)} to {gainPct(HELD_OUT.ciHigh)}), better in {HELD_OUT.better} of{" "}
-                  {HELD_OUT.restaurants} restaurants. The ruler is Qloo’s own menu tags: how often the crowd’s favourite places serve a
-                  dish compared with the city’s most popular ones ·{" "}
+                  <span className="font-semibold text-ink">A pre-registered test on {HELD_OUT.restaurants} restaurants it never saw.</span>{" "}
+                  With Qloo’s crowd-vs-city signal, Claude’s dish ideas lean {gainPct(HELD_OUT.ratio).slice(1)} further towards what each
+                  restaurant’s crowd favours ({gainCi(HELD_OUT)}), better in {HELD_OUT.better} of {HELD_OUT.restaurants}
+                  {HELD_OUT_SHOWN ? "." : ": not enough to rule out no difference."} Against Qloo’s affinity data alone it is clearly
+                  better, {gainPct(HELD_OUT.vsAffinity.ratio)} ({gainCi(HELD_OUT.vsAffinity)}). The ruler is Qloo’s own menu tags ·{" "}
                   <a
                     href={HELD_OUT.url}
                     target="_blank"
