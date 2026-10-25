@@ -20,6 +20,7 @@
 // Writes eval/benchmark.local.json (dish names and Qloo-derived counts: gitignored, never published)
 // and eval/SUMMARY.md (aggregates only).
 
+import "./load-env";
 import fs from "node:fs";
 import { baselinePrompt, genericBaseline } from "../src/lib/agent";
 import { parseBaselineDishes, planLift, type CrowdSets } from "../src/lib/lift";

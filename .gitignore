@@ -47,3 +47,4 @@ src/data/demos.json
 eval/results.local.json
 eval/benchmark.local.json
 eval/holdout.local.json
+eval/*.local.json

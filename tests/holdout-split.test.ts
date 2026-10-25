@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawEntity } from "@/lib/qloo";
-import { bootstrapRatio, hash32, signTest, splitHalves } from "../scripts/holdout-split";
+import { bootstrapRatio, hash32, signTest, splitHalves, verdict } from "../scripts/holdout-split";
 
 const places = (prefix: string, n: number): RawEntity[] => Array.from({ length: n }, (_, i) => ({ entity_id: `${prefix}${i}`, name: `${prefix}${i}` }));
 
@@ -52,5 +52,15 @@ describe("signTest and bootstrapRatio", () => {
     expect(r.low).toBeLessThan(r.ratio);
     expect(r.high).toBeGreaterThan(r.ratio);
     expect(bootstrapRatio(logs)).toEqual(r);
+  });
+});
+
+describe("verdict (pre-registered decision rule)", () => {
+  it("confirms only when the whole interval is above x1", () => {
+    expect(verdict({ low: 1.02, high: 1.4 })).toBe("confirmed");
+    expect(verdict({ low: 1, high: 1.4 })).toBe("not shown");
+    expect(verdict({ low: 0.9, high: 1.3 })).toBe("not shown");
+    expect(verdict({ low: 0.7, high: 0.95 })).toBe("reversed");
+    expect(verdict({ low: NaN, high: NaN })).toBe("not shown");
   });
 });

@@ -1,6 +1,7 @@
 // Shared by scripts/benchmark.ts and scripts/benchmark-holdout.ts: the restaurants, the model call
 // and the two blocks of Qloo data the grounded arms append to the app's baseline prompt.
 
+import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import { audienceAffinity, tasteGaps, tasteTags, type CrowdContrast, type RestaurantMatch } from "../src/lib/qloo-tasks";
 import type { AgentRequest } from "../src/lib/types";
@@ -19,6 +20,12 @@ export const RESTAURANTS: AgentRequest[] = [
   { restaurant: "Dishoom", city: "London", goal: "Launch a new seasonal special" },
   { restaurant: "Mama's Fish House", city: "Maui", goal: "Grow delivery orders" },
 ];
+
+/** The 22 restaurants added for the 30-restaurant held-out run, fixed in eval/PREREGISTRATION_30.md before it ran. */
+export type NewRestaurant = AgentRequest & { country: string; cuisine: string; price: string };
+export const NEW_RESTAURANTS: NewRestaurant[] = JSON.parse(
+  fs.readFileSync(new URL("../eval/heldout30.restaurants.json", import.meta.url), "utf8"),
+) as NewRestaurant[];
 
 export const MODEL = process.env.TASTECRAFT_MODEL || "claude-opus-5-5";
 export const usage = { calls: 0, input: 0, output: 0 };

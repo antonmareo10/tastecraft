@@ -17,6 +17,7 @@
     "test": "vitest run",
     "benchmark": "vite-node scripts/benchmark.ts",
     "benchmark:holdout": "vite-node scripts/benchmark-holdout.ts",
+    "eval:heldout": "vite-node scripts/benchmark-holdout.ts --eval30 --resume",
     "eval:heldout:screen": "vite-node scripts/heldout30-screen.ts",
     "eval:judge": "node scripts/eval.mjs"
   },

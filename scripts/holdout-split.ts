@@ -70,3 +70,17 @@ export function bootstrapRatio(logRatios: number[], draws = 10_000, seed = 12345
   means.sort((x, y) => x - y);
   return { ratio, low: means[Math.floor(draws * 0.025)], high: means[Math.ceil(draws * 0.975) - 1] };
 }
+
+export type Verdict = "confirmed" | "not shown" | "reversed";
+
+/**
+ * The pre-registered decision rule of the 30-restaurant run (eval/PREREGISTRATION_30.md), applied to a
+ * ratio's 95% interval: confirmed when the whole interval is above ×1, reversed when it is all below ×1,
+ * otherwise not shown (the sample cannot tell the ratio from no difference).
+ */
+export function verdict(ci: { low: number; high: number }): Verdict {
+  if (!(ci.low > 0) || !(ci.high > 0)) return "not shown";
+  if (ci.low > 1) return "confirmed";
+  if (ci.high < 1) return "reversed";
+  return "not shown";
+}
