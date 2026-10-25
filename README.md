@@ -3,7 +3,7 @@
 > Chains have insight teams. Independent restaurants decide their menu, their events and their marketing on gut feel.
 > **Tastecraft is an AI agent that reads Qloo's taste graph around a restaurant and turns it into decisions an owner can act on this week**: three dishes to test, an event, a ready-to-post campaign aimed at the right neighborhoods and a supplier shopping list, with the Qloo evidence behind every call.
 
-**Live demo:** **https://tastecraft-xi.vercel.app** · **Video (2:22): https://youtu.be/_q3ysYWMk7Q** · Built for the Qloo Agentic Hackathon (2026), from scratch during its submission period (30 Sep – 30 Oct 2026): the repository starts from `create-next-app` on 16 Oct 2026 (`git log --reverse`).
+**Live demo:** **https://tastecraft-xi.vercel.app** · **Video (2:27): https://youtu.be/rfagHjhzI1c** · Built for the Qloo Agentic Hackathon (2026), from scratch during its submission period (30 Sep – 30 Oct 2026): the repository starts from `create-next-app` on 16 Oct 2026 (`git log --reverse`).
 
 ## Judge in 60 seconds
 
